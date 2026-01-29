@@ -183,22 +183,44 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
 
     try {
       let assistantContent = "";
+      let toolOutput = "";  // Separate tracking for tool execution output
       
       for await (const event of agent.run(userMessage)) {
         switch (event.type) {
           case "text":
             assistantContent += event.content;
-            setCurrentOutput(assistantContent);
+            setCurrentOutput(toolOutput + assistantContent);
             break;
           case "tool_start":
-            setCurrentOutput(prev => prev + `\n⚡ ${event.name}...\n`);
+            toolOutput += `⚡ ${event.name}...\n`;
+            setCurrentOutput(toolOutput + assistantContent);
+            break;
+          case "tool_result":
+            // Tool completed - show success indicator
+            toolOutput = toolOutput.replace(
+              new RegExp(`⚡ ${(event as any).name}\\.\\.\\.\n$`),
+              `✓ ${(event as any).name}\n`
+            );
+            setCurrentOutput(toolOutput + assistantContent);
+            break;
+          case "tool_error":
+            // Tool failed - show error indicator
+            toolOutput = toolOutput.replace(
+              new RegExp(`⚡ ${(event as any).name}\\.\\.\\.\n$`),
+              `✗ ${(event as any).name}: ${(event as any).error}\n`
+            );
+            setCurrentOutput(toolOutput + assistantContent);
             break;
           case "done":
-            setMessages(prev => [...prev, { 
-              role: "assistant", 
-              content: assistantContent,
-              timestamp: new Date()
-            }]);
+            // Only add message if there's actual content
+            const finalContent = (toolOutput + assistantContent).trim();
+            if (finalContent) {
+              setMessages(prev => [...prev, { 
+                role: "assistant", 
+                content: finalContent,
+                timestamp: new Date()
+              }]);
+            }
             setCurrentOutput("");
             break;
           case "error":
