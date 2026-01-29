@@ -1,9 +1,45 @@
+# Sharkbait Project Instructions
+
+> **⚠️ MANDATORY: Read this entire file before making ANY changes to this codebase.**
+
+---
+
+## 🚨 STRICT ENFORCEMENT RULES
+
+These rules are **NON-NEGOTIABLE**. Failure to follow them will result in rejected work.
+
+### Rule 1: Always Check Backlog First
+Before starting ANY work:
+1. Run `backlog task list` to see existing tasks
+2. Search for related tasks before creating new ones
+3. Link your work to an existing task OR create a new one
+
+### Rule 2: Task Lifecycle is Mandatory
+```
+backlog task start <id>   # BEFORE you begin work
+backlog task complete <id> # AFTER work is done and committed
+```
+
+### Rule 3: Commits Must Reference Tasks
+All commits MUST include the task ID:
+- ✅ `git commit -m "SB-001.02: Add project directory structure"`
+- ❌ `git commit -m "Add some files"`
+
+### Rule 4: No Orphan Work
+Every code change must be:
+1. Linked to a backlog task
+2. Committed with task reference
+3. Marked complete when done
+
+---
+
+## Backlog.md MCP Integration
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 
 <CRITICAL_INSTRUCTION>
 
-## BACKLOG WORKFLOW INSTRUCTIONS
+### BACKLOG WORKFLOW INSTRUCTIONS
 
 This project uses Backlog.md MCP for all task and project management activities.
 
@@ -27,3 +63,56 @@ You MUST read the overview resource to understand the complete workflow. The inf
 </CRITICAL_INSTRUCTION>
 
 <!-- BACKLOG.MD MCP GUIDELINES END -->
+
+---
+
+## 📋 Quick Reference Commands
+
+| Action | Command |
+|--------|---------|
+| List all tasks | `backlog task list` |
+| View task details | `backlog task view <id>` |
+| Start a task | `backlog task start <id>` |
+| Complete a task | `backlog task complete <id>` |
+| Create subtask | `backlog task create "title" -p <parent-id>` |
+| Search tasks | `backlog task search "query"` |
+
+---
+
+## 🏗️ Project Structure
+
+```
+sharkbait/
+├── docs/           # PRD, TRD, Architecture docs
+├── src/            # Source code (to be created)
+├── backlog/        # Backlog.md task files
+│   └── tasks/      # Individual task markdown files
+└── AGENTS.md       # THIS FILE - project instructions
+```
+
+---
+
+## 🔧 Tech Stack (Do Not Deviate)
+
+| Component | Technology | Reason |
+|-----------|------------|--------|
+| Runtime | Bun | Fast startup, native TS |
+| Language | TypeScript | Type safety |
+| LLM | Azure OpenAI GPT Codex 5.2 | Enterprise |
+| Memory | Beads (bd CLI) | Git-backed persistence |
+| GitHub | git + gh CLI | No Octokit needed |
+| CLI UI | ink | React for terminals |
+| CLI Framework | commander | Argument parsing |
+
+---
+
+## ✅ Pre-Flight Checklist
+
+Before making any changes, verify:
+
+- [ ] I have read the relevant task in `backlog/tasks/`
+- [ ] I have run `backlog task start <id>`
+- [ ] I understand which files need to be modified
+- [ ] My changes align with docs/TRD.md specifications
+- [ ] My commit message will include the task ID
+
