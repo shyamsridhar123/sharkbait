@@ -3,6 +3,9 @@ node_modules/
 .pnp/
 .pnp.js
 
+# External beads CLI (not used - beads is built into Sharkbait)
+.beads/
+
 # Build outputs
 dist/
 build/

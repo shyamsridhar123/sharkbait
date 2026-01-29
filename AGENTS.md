@@ -99,7 +99,7 @@ sharkbait/
 | Runtime | Bun | Fast startup, native TS |
 | Language | TypeScript | Type safety |
 | LLM | Azure OpenAI GPT Codex 5.2 | Enterprise |
-| Memory | Beads (bd CLI) | Git-backed persistence |
+| Memory | Beads (built-in) | Git-backed persistence |
 | GitHub | git + gh CLI | No Octokit needed |
 | CLI UI | ink | React for terminals |
 | CLI Framework | commander | Argument parsing |
@@ -129,7 +129,6 @@ Before making any changes, verify:
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
