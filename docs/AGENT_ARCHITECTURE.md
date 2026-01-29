@@ -1,17 +1,30 @@
 # Sharkbait - Agent Architecture Specification
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** January 28, 2026  
-**Status:** Draft
+**Status:** Draft (Updated with industry best practices)
 
 ---
 
 ## 1. Overview
 
 This document defines a comprehensive agent architecture for Sharkbait, inspired by:
+- **Microsoft Research Magentic-One** (orchestrator pattern, dual-ledger progress tracking, stall detection)
+- **Anthropic's "Building Effective Agents"** (simplicity-first, evaluator-optimizer loops, parallel execution)
 - VS Code Custom Agents (`.agent.md` format, handoffs, tool restrictions)
-- Claude Code Plugins (agents, subagents, skills, hooks, commands)
-- Modern agentic patterns (orchestration, specialization, autonomy)
+- Claude Code Plugins (agents, skills, hooks, commands)
+
+### 1.1 Key Design Principles
+
+| Principle | Implementation |
+|-----------|----------------|
+| **Simplicity First** | 5 primary agents instead of 25+ subagents; use prompting modes |
+| **Stall Detection** | Dual-ledger system (Task + Progress) with automatic recovery |
+| **Iterative Refinement** | Evaluator-optimizer loops between agents (reviewer ↔ coder) |
+| **Parallel Execution** | Fan-out/fan-in coordination for independent tasks |
+| **Model Flexibility** | Different models for different agent roles |
+| **Action Reversibility** | Classify actions by reversibility before execution |
+| **Context Management** | Intelligent compaction preserving critical context |
 
 ---
 
@@ -25,27 +38,35 @@ This document defines a comprehensive agent architecture for Sharkbait, inspired
                                     │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          ORCHESTRATOR AGENT                                  │
-│        (Routes requests, manages context, coordinates workflows)             │
+│    (Routes requests, tracks progress, detects stalls, coordinates)          │
+│    [Task Ledger] ←→ [Progress Ledger] ←→ [Context Manager]                  │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
         ┌───────────────────────────┼───────────────────────────┐
         │                           │                           │
         ▼                           ▼                           ▼
 ┌───────────────┐          ┌───────────────┐          ┌───────────────┐
-│  Primary      │          │  Specialized  │          │   Workflow    │
-│  Agents       │          │  Subagents    │          │   Agents      │
+│  Primary      │          │  Prompting    │          │   Workflow    │
+│  Agents (5)   │          │  Modes        │          │   Agents      │
 ├───────────────┤          ├───────────────┤          ├───────────────┤
-│ • Coder       │          │ • Analyzers   │          │ • Feature Dev │
-│ • Reviewer    │          │ • Validators  │          │ • PR Workflow │
-│ • Planner     │          │ • Searchers   │          │ • Bug Fix     │
-│ • Debugger    │          │ • Formatters  │          │ • Refactor    │
+│ • Coder       │   uses   │ --mode=bugs   │          │ • Feature Dev │
+│ • Reviewer    │ ──────── │ --mode=security│         │ • PR Workflow │
+│ • Planner     │          │ --mode=test   │          │ • Bug Fix     │
+│ • Debugger    │          │ --mode=refactor│         │ • Refactor    │
+│ • Explorer    │          │ --mode=...    │          │               │
 └───────────────┘          └───────────────┘          └───────────────┘
         │                           │                           │
         └───────────────────────────┼───────────────────────────┘
                                     │
+                        ┌───────────┴───────────┐
+                        │   Iterative Loops     │
+                        │ (Reviewer ↔ Coder)    │
+                        └───────────────────────┘
+                                    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              TOOL LAYER                                      │
 │    (File Ops, Shell, Git, GitHub, Beads, Search, Fetch, MCP Servers)        │
+│    [Reversibility Classification: Easy | Effort | Irreversible]             │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -63,66 +84,68 @@ This document defines a comprehensive agent architecture for Sharkbait, inspired
 
 ## 3. Agent Types & Hierarchy
 
-### 3.1 Agent Classification
+### 3.1 Design Philosophy
+
+> **Simplicity First**: Start with the minimum viable agent set. Add complexity only when demonstrably needed.
+> — Anthropic, "Building Effective Agents"
+
+This architecture follows the **orchestrator-workers pattern** validated by Microsoft Research (Magentic-One) and Anthropic's production deployments. We prioritize:
+1. **Fewer, more capable agents** over many specialized subagents
+2. **Stall detection and recovery** over blind execution
+3. **Iterative refinement loops** over single-pass workflows
+4. **Parallel execution** where tasks are independent
+
+### 3.2 Agent Classification
 
 | Type | Description | Autonomy Level | Example |
 |------|-------------|----------------|---------|
-| **Orchestrator** | Routes requests, manages high-level flow | Full | Main agent |
-| **Primary Agent** | Handles major task categories | High | `coder`, `reviewer` |
-| **Subagent** | Performs focused subtasks | Medium | `bug-scanner`, `test-generator` |
-| **Nested Agent** | Subagent of a subagent | Low | `type-checker` within `bug-scanner` |
+| **Orchestrator** | Routes requests, tracks progress, manages recovery | Full | Main agent |
+| **Primary Agent** | Handles major task categories with full capability | High | `coder`, `reviewer` |
 | **Workflow Agent** | Multi-phase orchestrated process | High | `feature-dev` |
 
-### 3.2 Agent Hierarchy
+> **Note**: We intentionally avoid deep subagent hierarchies. Specialized behaviors (bug scanning, security auditing, test generation) are implemented as **prompting modes** within primary agents, not separate agents. This reduces latency, cost, and complexity.
+
+### 3.3 Agent Hierarchy (Simplified)
 
 ```
 Orchestrator (sharkbait)
 │
-├── Primary Agents
-│   ├── coder
-│   │   ├── Subagents
-│   │   │   ├── code-writer
-│   │   │   ├── refactorer
-│   │   │   └── optimizer
-│   │   └── Nested Agents
-│   │       └── type-fixer (under refactorer)
-│   │
-│   ├── reviewer
-│   │   └── Subagents
-│   │       ├── bug-scanner
-│   │       ├── security-auditor
-│   │       ├── style-checker
-│   │       └── performance-analyzer
-│   │
-│   ├── planner
-│   │   └── Subagents
-│   │       ├── task-decomposer
-│   │       ├── architecture-designer
-│   │       └── estimator
-│   │
-│   ├── debugger
-│   │   └── Subagents
-│   │       ├── error-tracer
-│   │       ├── log-analyzer
-│   │       └── hypothesis-tester
-│   │
-│   └── explorer
-│       └── Subagents
-│           ├── codebase-mapper
-│           ├── dependency-tracer
-│           └── pattern-finder
+├── Primary Agents (5 core agents)
+│   ├── coder       → Writes, edits, refactors code
+│   ├── reviewer    → Reviews code (bugs, security, style, performance)
+│   ├── planner     → Designs architecture, creates implementation plans
+│   ├── debugger    → Diagnoses and fixes bugs
+│   └── explorer    → Understands and explains codebase
 │
-├── Workflow Agents
-│   ├── feature-dev (7-phase workflow)
-│   ├── pr-workflow (PR lifecycle)
-│   ├── bug-fix (diagnosis → fix → verify)
-│   └── refactor (analyze → plan → execute → verify)
+├── Workflow Agents (orchestrate multi-phase processes)
+│   ├── feature-dev → Discovery → Plan → Implement → Review → Ship
+│   ├── pr-workflow → Branch → Commit → Push → PR → Review → Merge
+│   ├── bug-fix     → Diagnose → Fix → Verify → Document
+│   └── refactor    → Analyze → Plan → Execute → Verify
 │
-└── Utility Agents
-    ├── conversation-analyzer
-    ├── context-builder
-    └── memory-manager
+└── Orchestration Utilities (built into orchestrator, not separate agents)
+    ├── Progress Tracker   → Stall detection, recovery
+    ├── Context Manager    → Token management, compaction
+    └── Parallel Executor  → Fan-out/fan-in coordination
 ```
+
+### 3.4 Prompting Modes vs. Subagents
+
+Instead of 25+ subagents, primary agents support **prompting modes** that focus their behavior:
+
+| Primary Agent | Prompting Modes (via system prompt injection) |
+|---------------|----------------------------------------------|
+| `coder` | `--mode=write`, `--mode=refactor`, `--mode=test`, `--mode=docs` |
+| `reviewer` | `--mode=bugs`, `--mode=security`, `--mode=style`, `--mode=performance` |
+| `planner` | `--mode=architecture`, `--mode=tasks`, `--mode=estimate` |
+| `debugger` | `--mode=trace`, `--mode=hypothesis`, `--mode=fix` |
+| `explorer` | `--mode=map`, `--mode=dependencies`, `--mode=patterns` |
+
+This approach:
+- Reduces agent spawning overhead
+- Maintains context within a single agent
+- Allows easy parallel execution (same agent, different modes)
+- Simplifies testing and debugging
 
 ---
 
@@ -149,9 +172,78 @@ tools: ["*"]  # Full access to determine routing
 **Responsibilities:**
 1. Analyze user request intent
 2. Determine which primary agent(s) to invoke
-3. Manage conversation context
-4. Coordinate multi-agent workflows
-5. Synthesize results from subagents
+3. **Track progress and detect stalls** (dual-ledger system)
+4. Manage conversation context
+5. Coordinate multi-agent workflows
+6. **Trigger recovery and re-planning** when progress stalls
+7. Synthesize results from agents
+
+### 4.1.1 Dual-Ledger Progress Tracking (Inspired by Magentic-One)
+
+The orchestrator maintains two ledgers for robust task execution:
+
+```typescript
+interface TaskLedger {
+  // Outer loop - high-level planning
+  taskId: string;
+  objective: string;
+  facts: string[];           // Known truths about the task
+  assumptions: string[];     // Educated guesses that may be wrong
+  plan: PlanStep[];          // Current execution plan
+  createdAt: Date;
+  lastReplanAt: Date;
+}
+
+interface ProgressLedger {
+  // Inner loop - execution tracking
+  currentStep: number;
+  stepHistory: StepResult[];
+  stallCount: number;        // Consecutive steps without progress
+  lastProgressAt: Date;
+  agentAssignments: Map<string, AgentAssignment>;
+}
+
+interface StepResult {
+  stepId: number;
+  agent: string;
+  action: string;
+  outcome: "success" | "partial" | "failed" | "blocked";
+  progressMade: boolean;     // Did this step advance the task?
+  notes: string;
+}
+```
+
+**Stall Detection Algorithm:**
+
+```typescript
+const STALL_THRESHOLD = 3;  // Max steps without progress before re-planning
+const MAX_REPLANS = 2;      // Max re-planning attempts before escalation
+
+function checkProgress(progress: ProgressLedger, task: TaskLedger): Action {
+  if (isTaskComplete(progress)) {
+    return { type: "complete" };
+  }
+  
+  if (progress.stallCount >= STALL_THRESHOLD) {
+    if (task.replanCount >= MAX_REPLANS) {
+      return { type: "escalate", reason: "Repeated stalls, human intervention needed" };
+    }
+    return { type: "replan", reason: "No progress after " + STALL_THRESHOLD + " steps" };
+  }
+  
+  return { type: "continue", nextAgent: selectNextAgent(progress, task) };
+}
+```
+
+**Recovery Strategies:**
+
+| Stall Type | Detection | Recovery Action |
+|------------|-----------|-----------------|
+| Agent loops | Same tool called 3+ times with same args | Force agent switch |
+| No progress | 3 steps without `progressMade: true` | Re-plan with updated facts |
+| Repeated failures | Same error 2+ times | Update assumptions, try alternative |
+| Resource blocked | Tool returns "access denied" | Escalate to user |
+| Context overflow | Token limit approaching | Compact context, preserve key facts |
 
 **Routing Logic:**
 
@@ -568,6 +660,67 @@ You are an expert code analyst specializing in understanding complex codebases.
 
 ## 5. Workflow Agents
 
+### 5.0 Iterative Refinement Pattern (Evaluator-Optimizer)
+
+All workflows incorporate **iterative refinement loops** where output is evaluated and improved:
+
+```typescript
+// The evaluator-optimizer pattern
+async function iterativeRefinement<T>(
+  generate: () => Promise<T>,
+  evaluate: (result: T) => Promise<Evaluation>,
+  improve: (result: T, feedback: Evaluation) => Promise<T>,
+  maxIterations: number = 3
+): Promise<T> {
+  let result = await generate();
+  
+  for (let i = 0; i < maxIterations; i++) {
+    const evaluation = await evaluate(result);
+    
+    if (evaluation.approved) {
+      return result;
+    }
+    
+    if (evaluation.severity === "critical") {
+      result = await improve(result, evaluation);
+    } else {
+      // Minor issues - return with notes
+      return { ...result, notes: evaluation.suggestions };
+    }
+  }
+  
+  throw new Error("Max refinement iterations reached");
+}
+
+interface Evaluation {
+  approved: boolean;
+  severity: "none" | "minor" | "major" | "critical";
+  issues: Issue[];
+  suggestions: string[];
+}
+```
+
+**Example: Coder → Reviewer → Coder Loop**
+
+```typescript
+// After coder writes code, reviewer evaluates
+const code = await coder.write(requirements);
+const review = await reviewer.evaluate(code, { mode: "bugs" });
+
+if (!review.approved && review.issues.some(i => i.severity === "critical")) {
+  // Feed review back to coder for fixes
+  const fixedCode = await coder.fix({
+    originalCode: code,
+    issues: review.issues,
+    suggestions: review.suggestions,
+  });
+  
+  // Re-review the fixes
+  const reReview = await reviewer.evaluate(fixedCode, { mode: "bugs" });
+  // ... continue until approved or max iterations
+}
+```
+
 ### 5.1 Feature Development Workflow
 
 **File:** `agents/workflows/feature-dev.md`
@@ -590,11 +743,11 @@ tools: ["*"]
 | Phase | Name | Description | Agents Used |
 |-------|------|-------------|-------------|
 | 1 | **Discovery** | Understand requirements | Orchestrator |
-| 2 | **Exploration** | Analyze codebase | `explorer` (2-3 parallel) |
+| 2 | **Exploration** | Analyze codebase | `explorer` (parallel modes) |
 | 3 | **Clarification** | Ask clarifying questions | Orchestrator |
-| 4 | **Architecture** | Design approaches | `planner` (2-3 parallel) |
+| 4 | **Architecture** | Design approaches | `planner` |
 | 5 | **Implementation** | Build the feature | `coder` |
-| 6 | **Review** | Quality check | `reviewer` (3 parallel) |
+| 6 | **Review** | Quality check (with refinement loop) | `reviewer` ↔ `coder` |
 | 7 | **Summary** | Document completion | Orchestrator |
 
 **Handoffs:**
@@ -667,16 +820,16 @@ handoffs:
 ---
 ```
 
-**Stages:**
+**Stages (with Refinement Loops):**
 
-| Stage | Description | Agent |
-|-------|-------------|-------|
-| 1. Diagnose | Understand the bug | `debugger` |
-| 2. Reproduce | Confirm reproduction | `debugger.hypothesis-tester` |
-| 3. Fix | Implement fix | `coder` |
-| 4. Verify | Test the fix | `debugger` |
-| 5. Review | Check fix quality | `reviewer` |
-| 6. Document | Update docs/tests | `coder.test-writer` |
+| Stage | Description | Agent | Refinement |
+|-------|-------------|-------|------------|
+| 1. Diagnose | Understand the bug | `debugger --mode=trace` | - |
+| 2. Reproduce | Confirm reproduction | `debugger --mode=hypothesis` | - |
+| 3. Fix | Implement fix | `coder --mode=write` | - |
+| 4. Verify | Test the fix | `debugger` | If fails → back to Fix |
+| 5. Review | Check fix quality | `reviewer` | If issues → back to Fix |
+| 6. Document | Update docs/tests | `coder --mode=test` | - |
 
 ---
 
@@ -708,46 +861,181 @@ tools: ["read_file", "edit_file", "search_files", "run_command"]
 
 ---
 
-## 6. Specialized Subagents
+## 6. Prompting Modes (Replacing Subagents)
 
-### 6.1 Analysis Subagents
+Instead of spawning separate subagents, primary agents support **focused prompting modes** that specialize their behavior through system prompt injection.
 
-| Agent | Description | Tools | Trigger |
-|-------|-------------|-------|---------|
-| `bug-scanner` | Scans for bugs and logic errors | `read_file`, `grep_search` | Code review |
-| `security-auditor` | OWASP-focused security review | `read_file`, `grep_search` | Security review |
-| `performance-analyzer` | Find performance issues | `read_file`, `run_command` | Performance review |
-| `complexity-analyzer` | Measure code complexity | `read_file`, `grep_search` | Refactor planning |
-| `dependency-analyzer` | Analyze dependencies | `read_file`, `list_directory` | Upgrade planning |
+### 6.1 Reviewer Modes
 
-### 6.2 Generation Subagents
+The `reviewer` agent supports parallel execution with different modes:
 
-| Agent | Description | Tools | Trigger |
-|-------|-------------|-------|---------|
-| `test-generator` | Generate test cases | `read_file`, `write_file` | Test creation |
-| `doc-generator` | Generate documentation | `read_file`, `write_file` | Doc creation |
-| `type-generator` | Generate TypeScript types | `read_file`, `write_file` | Type definitions |
-| `mock-generator` | Generate mocks/fixtures | `read_file`, `write_file` | Test setup |
-| `migration-generator` | Generate migrations | `read_file`, `write_file` | Database changes |
+```typescript
+// Launch reviewer in multiple modes simultaneously
+const reviews = await Promise.all([
+  runAgent("reviewer", { mode: "bugs", context }),
+  runAgent("reviewer", { mode: "security", context }),
+  runAgent("reviewer", { mode: "style", context }),
+]);
 
-### 6.3 Validation Subagents
+// Consolidate findings
+const consolidated = consolidateReviews(reviews, { minConfidence: 80 });
+```
 
-| Agent | Description | Tools | Trigger |
-|-------|-------------|-------|---------|
-| `type-checker` | Validate TypeScript types | `run_command` | Type errors |
-| `lint-checker` | Run linting | `run_command` | Style violations |
-| `test-runner` | Run test suites | `run_command` | Test validation |
-| `build-validator` | Validate build | `run_command` | Build check |
-| `schema-validator` | Validate schemas | `read_file`, `run_command` | API changes |
+| Mode | Focus | Confidence Threshold |
+|------|-------|---------------------|
+| `bugs` | Logic errors, null handling, edge cases | 80% |
+| `security` | OWASP Top 10, injection, auth bypass | 90% |
+| `style` | Naming, formatting, conventions | 70% |
+| `performance` | N+1 queries, memory leaks, complexity | 75% |
 
-### 6.4 Orchestration Subagents
+### 6.2 Coder Modes
 
-| Agent | Description | Purpose |
-|-------|-------------|---------|
-| `conversation-analyzer` | Analyze chat for patterns | Extract feedback |
-| `context-builder` | Build relevant context | Gather files |
-| `memory-manager` | Manage Beads tasks | Task tracking |
-| `parallel-coordinator` | Coordinate parallel agents | Multi-agent runs |
+```typescript
+// Mode-specific system prompt additions
+const coderModes = {
+  write: "Focus on writing new code. Follow existing patterns.",
+  refactor: "Focus on improving structure without changing behavior.",
+  test: "Focus on generating comprehensive test cases.",
+  docs: "Focus on generating documentation and comments.",
+};
+```
+
+### 6.3 Planner Modes
+
+| Mode | Output |
+|------|--------|
+| `architecture` | System design with diagrams and component relationships |
+| `tasks` | Task breakdown with dependencies (Beads format) |
+| `estimate` | Effort estimates with confidence ranges |
+
+### 6.4 How Modes Work
+
+Modes are implemented via **system prompt injection**, not separate agents:
+
+```typescript
+async function runAgentWithMode(
+  agent: Agent,
+  mode: string,
+  context: Context
+): Promise<AgentResult> {
+  const modePrompt = agent.modes[mode];
+  if (!modePrompt) throw new Error(`Unknown mode: ${mode}`);
+  
+  // Inject mode-specific instructions into system prompt
+  const enhancedSystemPrompt = `
+${agent.systemPrompt}
+
+## Current Mode: ${mode}
+${modePrompt}
+
+Focus exclusively on ${mode}-related concerns for this execution.
+`;
+
+  return agent.run({
+    ...context,
+    systemPrompt: enhancedSystemPrompt,
+  });
+}
+```
+
+**Benefits over Subagents:**
+- Single agent maintains full context
+- No handoff latency between agents
+- Easier to test and debug
+- Parallel modes use same model, cheaper than separate agents
+
+---
+
+## 6.5 Parallel Execution Coordinator
+
+For tasks that benefit from multiple perspectives, the orchestrator coordinates parallel agent execution:
+
+```typescript
+interface ParallelExecutionConfig {
+  agents: AgentInvocation[];
+  strategy: "all" | "race" | "quorum";
+  timeout: number;
+  consolidation: "merge" | "vote" | "best";
+}
+
+interface AgentInvocation {
+  agent: string;
+  mode?: string;
+  context: Context;
+  weight?: number;  // For weighted voting
+}
+
+// Parallel execution strategies
+type Strategy = {
+  all: "Wait for all agents to complete, then consolidate";
+  race: "Return result from first agent to complete";
+  quorum: "Return when majority agree on result";
+};
+
+async function executeParallel(config: ParallelExecutionConfig): Promise<ConsolidatedResult> {
+  const { agents, strategy, timeout, consolidation } = config;
+  
+  // Launch all agents concurrently
+  const promises = agents.map(async (invocation) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const result = await runAgentWithMode(
+        invocation.agent,
+        invocation.mode,
+        { ...invocation.context, signal: controller.signal }
+      );
+      return { status: "success", result, agent: invocation.agent };
+    } catch (error) {
+      return { status: "failed", error, agent: invocation.agent };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  });
+  
+  // Apply strategy
+  switch (strategy) {
+    case "race":
+      return Promise.race(promises);
+      
+    case "quorum":
+      return waitForQuorum(promises, Math.ceil(agents.length / 2));
+      
+    case "all":
+    default:
+      const results = await Promise.allSettled(promises);
+      return consolidateResults(results, consolidation);
+  }
+}
+```
+
+**Consolidation Strategies:**
+
+| Strategy | Use Case | Implementation |
+|----------|----------|----------------|
+| `merge` | Combine unique findings (reviews) | Dedupe by finding, merge contexts |
+| `vote` | Agree on a decision | Weighted majority voting |
+| `best` | Select highest-quality result | Score each result, pick best |
+
+**Example: Parallel Code Review**
+
+```typescript
+const reviewConfig: ParallelExecutionConfig = {
+  agents: [
+    { agent: "reviewer", mode: "bugs", weight: 1.0 },
+    { agent: "reviewer", mode: "security", weight: 1.5 },  // Security issues weighted higher
+    { agent: "reviewer", mode: "style", weight: 0.5 },
+    { agent: "reviewer", mode: "performance", weight: 0.8 },
+  ],
+  strategy: "all",
+  timeout: 30000,
+  consolidation: "merge",
+};
+
+const consolidatedReview = await executeParallel(reviewConfig);
+// Returns merged list of all findings, deduplicated, sorted by severity
+```
 
 ---
 
@@ -1160,7 +1448,87 @@ const consolidated = consolidateReviews(reviews);
 
 ## 12. Agent Configuration
 
-### 12.1 Agent File Format
+### 12.1 Model Flexibility (Heterogeneous Models)
+
+Following Magentic-One's approach, Sharkbait supports **different models for different agents**:
+
+> "Magentic-One is model-agnostic, allowing the integration of heterogeneous models... For the Orchestrator, we recommend a strong reasoning model."
+> — Microsoft Research
+
+```typescript
+interface ModelConfig {
+  orchestrator: ModelSpec;   // Strong reasoning (GPT-4o, Claude Opus)
+  primaryAgents: ModelSpec;  // Balanced (GPT-4o, Claude Sonnet)
+  parallelModes: ModelSpec;  // Cost-efficient for parallel runs (GPT-4-turbo, Claude Haiku)
+}
+
+interface ModelSpec {
+  provider: "azure" | "openai" | "anthropic";
+  model: string;
+  deployment?: string;       // Azure-specific
+  maxTokens: number;
+  temperature: number;
+}
+
+// Default model assignments
+const defaultModels: ModelConfig = {
+  orchestrator: {
+    provider: "azure",
+    model: "gpt-codex-5.2",
+    deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
+    maxTokens: 16000,
+    temperature: 0.3,        // Lower for consistent routing
+  },
+  primaryAgents: {
+    provider: "azure",
+    model: "gpt-codex-5.2",
+    deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
+    maxTokens: 16000,
+    temperature: 0.7,        // Higher for creative coding
+  },
+  parallelModes: {
+    provider: "azure",
+    model: "gpt-4-turbo",    // Cheaper for parallel review modes
+    deployment: process.env.AZURE_OPENAI_PARALLEL_DEPLOYMENT,
+    maxTokens: 8000,
+    temperature: 0.5,
+  },
+};
+```
+
+**Model Selection by Task:**
+
+| Task Type | Recommended Model | Reasoning |
+|-----------|------------------|-----------|
+| Orchestration & routing | Strong reasoning (GPT-4o, o1) | Needs reliable decision-making |
+| Complex coding | Full-capability (Codex 5.2) | Needs deep context understanding |
+| Code review (parallel) | Efficient (GPT-4-turbo) | Cost-effective for 3-4 parallel runs |
+| Simple edits | Fast (Haiku-level) | Speed over depth |
+| Security analysis | Strong reasoning | Critical findings need accuracy |
+
+**Configuration File:**
+
+```json
+// .sharkbait.json
+{
+  "models": {
+    "orchestrator": {
+      "provider": "azure",
+      "deployment": "gpt-codex-5.2"
+    },
+    "primaryAgents": {
+      "provider": "azure", 
+      "deployment": "gpt-codex-5.2"
+    },
+    "parallelModes": {
+      "provider": "azure",
+      "deployment": "gpt-4-turbo"
+    }
+  }
+}
+```
+
+### 12.2 Agent File Format
 
 ```markdown
 ---
@@ -1177,7 +1545,7 @@ description: |                      # Triggering conditions with examples
   </example>
 
 # Optional
-model: inherit                      # inherit, sonnet, haiku, opus
+model: inherit                      # inherit | orchestrator | primary | parallel | <specific-model>
 color: blue                         # blue, cyan, green, yellow, magenta, red
 tools: ["read_file", "write_file", "grep_search"]  # Restrict tools (omit for all)
 handoffs:                           # Suggested next agents

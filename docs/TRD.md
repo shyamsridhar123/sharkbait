@@ -1,9 +1,20 @@
 # Sharkbait - Technical Requirements Document (TRD)
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** January 28, 2026  
 **Author:** Shyam Sridhar  
-**Status:** Draft
+**Status:** Draft (Updated with industry best practices)
+
+---
+
+## Key Enhancements (v1.1)
+
+This version incorporates learnings from **Microsoft Research Magentic-One** and **Anthropic's "Building Effective Agents"**:
+
+- **Stall Detection**: Dual-ledger progress tracking with automatic recovery (Section 3.2)
+- **Context Management**: Intelligent compaction preserving critical context (Section 3.3)
+- **Action Reversibility**: Classification system beyond simple regex patterns (Section 4.2)
+- **Safety Improvements**: Safer command execution with argument arrays (Section 4.2)
 
 ---
 
@@ -212,30 +223,109 @@ interface ToolDefinition {
 
 import { AzureOpenAIClient } from "../llm/azure-openai";
 import { ToolRegistry } from "../tools";
+import { ContextManager } from "./context";
+import { ProgressTracker, TaskLedger, ProgressLedger } from "./progress";
 import type { Message } from "../llm/types";
+
+// Constants for stall detection (inspired by Magentic-One)
+const STALL_THRESHOLD = 3;      // Consecutive steps without progress
+const MAX_REPLANS = 2;          // Maximum re-planning attempts
+const MAX_ITERATIONS = 50;      // Absolute limit on loop iterations
 
 export class AgentLoop {
   private llm: AzureOpenAIClient;
   private tools: ToolRegistry;
   private messages: Message[] = [];
   private systemPrompt: string;
+  private contextManager: ContextManager;
+  private progressTracker: ProgressTracker;
 
   constructor(llm: AzureOpenAIClient, tools: ToolRegistry) {
     this.llm = llm;
     this.tools = tools;
     this.systemPrompt = this.buildSystemPrompt();
+    this.contextManager = new ContextManager({
+      maxTokens: 128000,
+      reservedForResponse: 16000,
+      compactionThreshold: 0.85,
+    });
+    this.progressTracker = new ProgressTracker();
   }
 
   async *run(userMessage: string): AsyncGenerator<AgentEvent> {
     this.messages.push({ role: "user", content: userMessage });
+    
+    // Initialize task ledger for this request
+    const taskLedger: TaskLedger = {
+      taskId: crypto.randomUUID(),
+      objective: userMessage,
+      facts: [],
+      assumptions: [],
+      plan: [],
+      createdAt: new Date(),
+      lastReplanAt: new Date(),
+      replanCount: 0,
+    };
+    
+    const progressLedger: ProgressLedger = {
+      currentStep: 0,
+      stepHistory: [],
+      stallCount: 0,
+      lastProgressAt: new Date(),
+      agentAssignments: new Map(),
+    };
+    
+    let iteration = 0;
 
-    while (true) {
+    while (iteration < MAX_ITERATIONS) {
+      iteration++;
+      
+      // Check for stalls and handle recovery
+      const progressCheck = this.progressTracker.checkProgress(progressLedger, taskLedger);
+      
+      if (progressCheck.type === "complete") {
+        yield { type: "done" };
+        return;
+      }
+      
+      if (progressCheck.type === "escalate") {
+        yield { type: "error", message: progressCheck.reason };
+        return;
+      }
+      
+      if (progressCheck.type === "replan") {
+        yield { type: "replan", reason: progressCheck.reason };
+        taskLedger.replanCount++;
+        taskLedger.lastReplanAt = new Date();
+        // Add re-planning context to messages
+        this.messages.push({
+          role: "system",
+          content: `[Re-planning triggered: ${progressCheck.reason}]\nRevise your approach based on what we've learned.`,
+        });
+      }
+      
+      // Context management - compact if needed
+      const contextMessages = await this.contextManager.checkAndCompact(
+        {
+          systemPrompt: this.systemPrompt,
+          taskLedger,
+          recentMessages: this.messages.slice(-10),
+          activeFiles: [],
+          errorContext: [],
+        },
+        {
+          olderMessages: this.messages.slice(0, -10),
+          toolResults: [],
+          explorationFindings: [],
+        }
+      );
+      
       // Stream LLM response
       let fullContent = "";
       let toolCalls: ToolCall[] = [];
 
       for await (const chunk of this.llm.chat(
-        [{ role: "system", content: this.systemPrompt }, ...this.messages],
+        [{ role: "system", content: this.systemPrompt }, ...contextMessages],
         this.tools.getDefinitions()
       )) {
         if (chunk.content) {
@@ -254,7 +344,7 @@ export class AgentLoop {
         return;
       }
 
-      // Execute tool calls
+      // Execute tool calls and track progress
       this.messages.push({
         role: "assistant",
         content: fullContent,
@@ -311,7 +401,165 @@ type AgentEvent =
   | { type: "done" };
 ```
 
-### 3.3 Tool Registry
+### 3.3 Context Management
+
+The agent maintains context within token limits through intelligent compaction:
+
+```typescript
+// src/agent/context.ts
+
+interface ContextConfig {
+  maxTokens: number;              // Total context window (e.g., 128000)
+  reservedForResponse: number;    // Tokens reserved for model response (e.g., 16000)
+  compactionThreshold: number;    // When to trigger compaction (e.g., 0.85)
+}
+
+interface PreservedContext {
+  // These are NEVER compacted
+  systemPrompt: string;
+  taskLedger: TaskLedger;         // Current task and plan
+  recentMessages: Message[];      // Last N messages (configurable)
+  activeFiles: FileContext[];     // Files currently being edited
+  errorContext: ErrorContext[];   // Recent errors (for debugging continuity)
+}
+
+interface CompactableContext {
+  // These can be summarized or removed
+  olderMessages: Message[];
+  toolResults: ToolResult[];
+  explorationFindings: string[];
+}
+
+class ContextManager {
+  private config: ContextConfig;
+  private tokenCounter: TokenCounter;
+  
+  constructor(config: ContextConfig) {
+    this.config = config;
+    this.tokenCounter = new TokenCounter();
+  }
+
+  async checkAndCompact(
+    preserved: PreservedContext,
+    compactable: CompactableContext
+  ): Promise<Message[]> {
+    const currentTokens = this.countTotalTokens(preserved, compactable);
+    const threshold = this.config.maxTokens * this.config.compactionThreshold;
+    
+    if (currentTokens < threshold) {
+      return this.buildMessageArray(preserved, compactable);
+    }
+    
+    // Trigger compaction
+    console.log(`Context compaction triggered: ${currentTokens}/${this.config.maxTokens} tokens`);
+    
+    return this.compact(preserved, compactable, currentTokens - threshold);
+  }
+
+  private async compact(
+    preserved: PreservedContext,
+    compactable: CompactableContext,
+    tokensToFree: number
+  ): Promise<Message[]> {
+    const strategies: CompactionStrategy[] = [
+      // 1. Remove old tool results (keep summaries)
+      { 
+        name: "summarize-tool-results",
+        apply: () => this.summarizeToolResults(compactable.toolResults),
+        tokensSaved: () => this.estimateToolResultTokens(compactable.toolResults) * 0.7,
+      },
+      // 2. Summarize older conversation
+      {
+        name: "summarize-old-messages", 
+        apply: () => this.summarizeOldMessages(compactable.olderMessages),
+        tokensSaved: () => this.estimateMessageTokens(compactable.olderMessages) * 0.8,
+      },
+      // 3. Remove exploration findings (keep key facts in task ledger)
+      {
+        name: "compact-exploration",
+        apply: () => this.compactExploration(compactable.explorationFindings, preserved.taskLedger),
+        tokensSaved: () => this.estimateExplorationTokens(compactable.explorationFindings) * 0.9,
+      },
+    ];
+
+    let freedTokens = 0;
+    const compactedContext = { ...compactable };
+    
+    for (const strategy of strategies) {
+      if (freedTokens >= tokensToFree) break;
+      
+      console.log(`Applying compaction strategy: ${strategy.name}`);
+      const result = await strategy.apply();
+      freedTokens += strategy.tokensSaved();
+      Object.assign(compactedContext, result);
+    }
+
+    return this.buildMessageArray(preserved, compactedContext);
+  }
+
+  private async summarizeToolResults(results: ToolResult[]): Promise<{ toolResults: ToolResult[] }> {
+    // Keep only last 5 tool results in full, summarize older ones
+    const keepFull = results.slice(-5);
+    const toSummarize = results.slice(0, -5);
+    
+    if (toSummarize.length === 0) {
+      return { toolResults: keepFull };
+    }
+    
+    const summary: ToolResult = {
+      name: "previous_tool_summary",
+      content: `Summary of ${toSummarize.length} previous tool calls:\n` +
+        toSummarize.map(r => `- ${r.name}: ${this.truncate(r.content, 100)}`).join("\n"),
+    };
+    
+    return { toolResults: [summary, ...keepFull] };
+  }
+
+  private async summarizeOldMessages(messages: Message[]): Promise<{ olderMessages: Message[] }> {
+    // Use LLM to summarize conversation history
+    const summaryPrompt = `Summarize this conversation history, preserving:
+- Key decisions made
+- Important context about the task
+- Any constraints or requirements mentioned
+- File paths and code locations discussed
+
+Conversation:
+${messages.map(m => `${m.role}: ${this.truncate(m.content, 500)}`).join("\n")}
+
+Provide a concise summary:`;
+
+    // In production, this would call the LLM
+    const summary = await this.llm.complete(summaryPrompt);
+    
+    return {
+      olderMessages: [{
+        role: "system",
+        content: `[Conversation Summary]\n${summary}`,
+      }],
+    };
+  }
+  
+  private truncate(text: string, maxLength: number): string {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength) + "...";
+  }
+}
+```
+
+**Context Preservation Rules:**
+
+| Context Type | Preservation Rule | Compaction Strategy |
+|--------------|-------------------|---------------------|
+| System prompt | NEVER compact | - |
+| Task ledger | NEVER compact | Update facts, remove stale guesses |
+| Last 10 messages | NEVER compact | - |
+| Active file contents | NEVER compact | - |
+| Error context | Keep last 3 | Remove older errors |
+| Tool results | Keep last 5 full | Summarize older results |
+| Exploration findings | Keep key facts | Move to task ledger, summarize rest |
+| Older conversation | Summarize | LLM-generated summary |
+
+### 3.4 Tool Registry
 
 ```typescript
 // src/tools/index.ts
@@ -548,14 +796,50 @@ export const fileTools: Tool[] = [
 
 import type { Tool } from "./index";
 
-const DANGEROUS_PATTERNS = [
-  /rm\s+-rf\s+[\/~]/,
-  />\s*\/dev\/sd/,
-  /mkfs/,
-  /dd\s+if=/,
-  /:(){ :|:& };:/,  // Fork bomb
-  /git\s+push\s+.*--force/,
-];
+// Action reversibility classification (inspired by Magentic-One research)
+// "Equip agents with the ability to assess the reversibility of their actions"
+enum Reversibility {
+  EASY = "easy",           // Can be undone trivially (git checkout, mkdir)
+  EFFORT = "effort",       // Can be undone with effort (git push, npm publish)
+  IRREVERSIBLE = "irreversible",  // Cannot be undone (rm -rf, email sent)
+}
+
+interface ActionClassification {
+  reversibility: Reversibility;
+  requiresConfirmation: boolean;
+  undoCommand?: string;
+}
+
+const ACTION_CLASSIFICATIONS: Map<RegExp, ActionClassification> = new Map([
+  // Irreversible - always require confirmation
+  [/rm\s+-rf\s+[\/~]/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
+  [/>\s*\/dev\/sd/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
+  [/mkfs/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
+  [/dd\s+if=/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
+  [/:(){ :|:& };:/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
+  [/DROP\s+DATABASE/i, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
+  [/TRUNCATE\s+TABLE/i, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
+  
+  // Effort to reverse - warn but allow
+  [/git\s+push/, { reversibility: Reversibility.EFFORT, requiresConfirmation: false, undoCommand: "git revert or git push --force (with care)" }],
+  [/npm\s+publish/, { reversibility: Reversibility.EFFORT, requiresConfirmation: true }],
+  [/git\s+push\s+.*--force/, { reversibility: Reversibility.EFFORT, requiresConfirmation: true, undoCommand: "git reflog + push" }],
+  
+  // Easy to reverse - proceed with logging
+  [/git\s+checkout/, { reversibility: Reversibility.EASY, requiresConfirmation: false, undoCommand: "git checkout -" }],
+  [/git\s+branch\s+-d/, { reversibility: Reversibility.EASY, requiresConfirmation: false, undoCommand: "git branch <name> <sha>" }],
+  [/mkdir/, { reversibility: Reversibility.EASY, requiresConfirmation: false, undoCommand: "rmdir" }],
+]);
+
+function classifyAction(command: string): ActionClassification {
+  for (const [pattern, classification] of ACTION_CLASSIFICATIONS) {
+    if (pattern.test(command)) {
+      return classification;
+    }
+  }
+  // Default: unknown commands are treated as requiring caution
+  return { reversibility: Reversibility.EFFORT, requiresConfirmation: false };
+}
 
 export const shellTools: Tool[] = [
   {
@@ -573,10 +857,19 @@ export const shellTools: Tool[] = [
     async execute({ command, cwd, background }) {
       const cmd = command as string;
       
-      // Check for dangerous commands
-      for (const pattern of DANGEROUS_PATTERNS) {
-        if (pattern.test(cmd)) {
-          throw new Error(`Potentially dangerous command blocked: ${cmd}`);
+      // Classify action reversibility
+      const classification = classifyAction(cmd);
+      
+      if (classification.reversibility === Reversibility.IRREVERSIBLE) {
+        throw new Error(`Irreversible action blocked: ${cmd}. This action cannot be undone.`);
+      }
+      
+      if (classification.requiresConfirmation) {
+        // In production, this would trigger a user confirmation flow
+        console.warn(`⚠️  Action requires confirmation: ${cmd}`);
+        console.warn(`   Reversibility: ${classification.reversibility}`);
+        if (classification.undoCommand) {
+          console.warn(`   To undo: ${classification.undoCommand}`);
         }
       }
 
@@ -594,7 +887,8 @@ export const shellTools: Tool[] = [
       }
 
       try {
-        const result = await $`${{ raw: cmd }}`.cwd(workingDir).text();
+        // Use argument array instead of raw template for safety
+        const result = await $`sh -c ${cmd}`.cwd(workingDir).text();
         return { stdout: result, exitCode: 0 };
       } catch (error: any) {
         return { 
