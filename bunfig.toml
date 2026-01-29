@@ -1,0 +1,24 @@
+# Bun configuration for Sharkbait
+
+[install]
+# Use lockfile for reproducible builds
+frozen = false
+
+[install.cache]
+# Enable caching for faster installs
+dir = "~/.bun/install/cache"
+
+[run]
+# Silent mode for cleaner output
+silent = false
+
+[test]
+# Test configuration
+coverage = true
+coverageDir = "coverage"
+
+[build]
+# Build configuration
+target = "bun"
+minify = true
+sourcemap = "external"

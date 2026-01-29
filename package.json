@@ -1,0 +1,49 @@
+{
+  "name": "sharkbait",
+  "version": "1.0.0",
+  "description": "AI coding assistant for the command line",
+  "type": "module",
+  "bin": {
+    "sharkbait": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "bun run src/cli.ts",
+    "build": "bun build src/cli.ts --outdir dist --target bun",
+    "build:binary": "bun build src/cli.ts --compile --outfile sharkbait",
+    "build:all": "bun run scripts/build-all.ts",
+    "test": "bun test",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "openai": "^4.77.0",
+    "ink": "^4.4.1",
+    "react": "^18.2.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "author": "Shyam Sridhar",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shyamsridhar123/sharkbait.git"
+  },
+  "keywords": [
+    "ai",
+    "coding-assistant",
+    "cli",
+    "llm",
+    "azure-openai"
+  ]
+}
