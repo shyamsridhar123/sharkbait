@@ -126,6 +126,27 @@ cd your-project
 sharkbait init
 ```
 
+## Slash Commands
+
+During an interactive chat session, use slash commands for quick actions:
+
+| Command | Description |
+|---------|-------------|
+| `/cd <path>` | Change working directory (creates if needed) |
+| `/pwd` | Show current working directory |
+| `/clear` | Clear message history |
+| `/help` | Show available commands |
+
+**Example:** Change to a new project directory:
+```
+> /cd C:\Users\yourname\code\new-project
+Directory not found. Create it? Type 'y' or 'yes' to create.
+> y
+✓ Created directory and changed to: C:\Users\yourname\code\new-project
+```
+
+📖 [Full Slash Commands Reference](docs/COMMANDS.md)
+
 ## Available Tools
 
 Sharkbait has access to 24+ tools across different categories:

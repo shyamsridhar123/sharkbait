@@ -35,9 +35,11 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
   const [currentOutput, setCurrentOutput] = useState("");
   const [showWelcome, setShowWelcome] = useState(true);
   const [tokenCount, setTokenCount] = useState(0);
+  const [currentDir, setCurrentDir] = useState(() => getWorkingDir(cliWorkingDir));
+  const [pendingConfirm, setPendingConfirm] = useState<{ type: string; data: any } | null>(null);
   const { exit } = useApp();
 
-  const workingDir = getWorkingDir(cliWorkingDir);
+  const workingDir = currentDir;
 
   const agent = React.useMemo(() => new Agent({
     contextFiles,
@@ -65,9 +67,175 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
     }
   });
 
+  // Handle slash commands
+  function handleSlashCommand(command: string): boolean {
+    const parts = command.slice(1).split(/\s+/);
+    const cmd = parts[0]?.toLowerCase();
+    const args = parts.slice(1).join(" ");
+
+    switch (cmd) {
+      case "cd": {
+        if (!args) {
+          setMessages(prev => [...prev, {
+            role: "system",
+            content: `Current directory: ${currentDir}\n\nUsage: /cd <path>`,
+            timestamp: new Date()
+          }]);
+          return true;
+        }
+        
+        // Resolve path (handle relative paths)
+        const { resolve, isAbsolute } = require("path");
+        const { existsSync, statSync, mkdirSync } = require("fs");
+        
+        const newPath = isAbsolute(args) ? args : resolve(currentDir, args);
+        
+        if (!existsSync(newPath)) {
+          // Directory doesn't exist - ask for permission to create it
+          setMessages(prev => [...prev, {
+            role: "system",
+            content: `Directory not found: ${newPath}\n\nCreate it? Type 'y' or 'yes' to create, anything else to cancel.`,
+            timestamp: new Date()
+          }]);
+          setPendingConfirm({ type: "mkdir", data: { path: newPath } });
+          return true;
+        }
+        
+        try {
+          const stat = statSync(newPath);
+          if (!stat.isDirectory()) {
+            setMessages(prev => [...prev, {
+              role: "system",
+              content: `Error: Not a directory: ${newPath}`,
+              timestamp: new Date()
+            }]);
+            return true;
+          }
+        } catch {
+          setMessages(prev => [...prev, {
+            role: "system",
+            content: `Error: Cannot access: ${newPath}`,
+            timestamp: new Date()
+          }]);
+          return true;
+        }
+        
+        // Change directory
+        process.chdir(newPath);
+        setCurrentDir(newPath);
+        setMessages(prev => [...prev, {
+          role: "system",
+          content: `Changed directory to: ${newPath}`,
+          timestamp: new Date()
+        }]);
+        return true;
+      }
+      
+      case "pwd": {
+        setMessages(prev => [...prev, {
+          role: "system",
+          content: `Current directory: ${currentDir}`,
+          timestamp: new Date()
+        }]);
+        return true;
+      }
+      
+      case "help": {
+        setMessages(prev => [...prev, {
+          role: "system",
+          content: `Available commands:
+  /cd <path>  - Change working directory
+  /pwd        - Show current working directory
+  /clear      - Clear message history
+  /help       - Show this help message`,
+          timestamp: new Date()
+        }]);
+        return true;
+      }
+      
+      case "clear": {
+        setMessages([]);
+        setShowWelcome(true);
+        return true;
+      }
+      
+      default:
+        return false;
+    }
+  }
+
+  // Handle pending confirmation responses
+  function handleConfirmation(response: string): boolean {
+    if (!pendingConfirm) return false;
+    
+    const isYes = response.toLowerCase() === "y" || response.toLowerCase() === "yes";
+    
+    if (pendingConfirm.type === "mkdir") {
+      const { path: targetPath } = pendingConfirm.data;
+      const { mkdirSync } = require("fs");
+      
+      if (isYes) {
+        try {
+          mkdirSync(targetPath, { recursive: true });
+          process.chdir(targetPath);
+          setCurrentDir(targetPath);
+          setMessages(prev => [...prev, {
+            role: "system",
+            content: `✓ Created directory and changed to: ${targetPath}`,
+            timestamp: new Date()
+          }]);
+        } catch (err: any) {
+          setMessages(prev => [...prev, {
+            role: "system",
+            content: `Error creating directory: ${err.message}`,
+            timestamp: new Date()
+          }]);
+        }
+      } else {
+        setMessages(prev => [...prev, {
+          role: "system",
+          content: `Cancelled. Directory not created.`,
+          timestamp: new Date()
+        }]);
+      }
+      
+      setPendingConfirm(null);
+      return true;
+    }
+    
+    setPendingConfirm(null);
+    return false;
+  }
+
   async function handleSubmit(): Promise<void> {
     const userMessage = input.trim();
     if (!userMessage) return;
+
+    // Handle pending confirmations first
+    if (pendingConfirm) {
+      setInput("");
+      if (showWelcome) setShowWelcome(false);
+      setMessages(prev => [...prev, { role: "user", content: userMessage, timestamp: new Date() }]);
+      handleConfirmation(userMessage);
+      return;
+    }
+
+    // Handle slash commands
+    if (userMessage.startsWith("/")) {
+      setInput("");
+      if (handleSlashCommand(userMessage)) {
+        if (showWelcome) setShowWelcome(false);
+        return;
+      }
+      // Unknown command - show error
+      setMessages(prev => [...prev, {
+        role: "system",
+        content: `Unknown command: ${userMessage.split(/\s+/)[0]}\nType /help for available commands.`,
+        timestamp: new Date()
+      }]);
+      if (showWelcome) setShowWelcome(false);
+      return;
+    }
 
     // Hide welcome screen on first message
     if (showWelcome) {
