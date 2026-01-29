@@ -8,35 +8,35 @@ import * as fs from "fs";
 import * as path from "path";
 import { colors } from "./theme";
 
-// Try to load the logo from file, fallback to inline version
+// Try to load the logo from file
 function loadLogo(): string {
   try {
     const logoPath = path.join(process.cwd(), "public/images/ascii-art.txt");
     return fs.readFileSync(logoPath, "utf8");
   } catch {
-    // Fallback compact logo if file not found
-    return COMPACT_LOGO;
+    // Fallback text logo if file not found
+    return TEXT_LOGO;
   }
 }
 
-// Compact version for when full logo is too big
-const COMPACT_LOGO = `
-      ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣶⣿
-    ⠀⠀⠀⠀⠀⣠⣴⣾⣿⣿⣿⣿⣿⣿
-    ⠀⠀⣠⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-    ⢀⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠋
-    ⠹⣿⣿⣿⣿⣿⣿⣿⣿⠿⠋⠁
-    ⠀⠈⠻⣿⣿⡿⠟⠋
+// Simple text-based logo fallback
+const TEXT_LOGO = `
+   _____ _   _          _____  _  ______  _    _ _____
+  / ____| | | |   /\   |  __ \| |/ /  _ \| |  | |_   _|
+ | (___ | |_| |  /  \  | |__) | ' /| |_) | |  | | | |
+  \___ \|  _  | / /\ \ |  _  /|  < |  _ <| |  | | | |
+  ____) | | | |/ ____ \| | \ \| . \| |_) | |__| |_| |_
+ |_____/|_| |_/_/    \_\_|  \_\_|\_\____/ \____/|_____|
 `.trim();
 
 interface LogoProps {
-  variant?: "full" | "compact" | "inline";
+  variant?: "full" | "medium" | "compact" | "inline";
   showTagline?: boolean;
 }
 
-export function Logo({ variant = "compact", showTagline = true }: LogoProps): React.JSX.Element {
-  const logoText = variant === "full" ? loadLogo() : COMPACT_LOGO;
+export function Logo({ variant = "full", showTagline = true }: LogoProps): React.JSX.Element {
+  // Always try to load the actual ASCII art for full and medium
+  const logoText = variant === "inline" ? "" : loadLogo();
 
   return (
     <Box flexDirection="column" alignItems="center">

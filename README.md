@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  <strong>AI coding assistant for the command line</strong>
+  <strong>"Sharkbait, ooh ha ha!"</strong><br>
+  <em>An AI coding assistant that won't leave you swimming in circles</em>
 </p>
 
 <p align="center">
@@ -19,61 +20,31 @@
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/runtime-Bun-orange.svg" alt="Bun">
   <img src="https://img.shields.io/badge/language-TypeScript-blue.svg" alt="TypeScript">
+  <img src="https://img.shields.io/badge/fish_are_friends-not_food-brightgreen.svg" alt="Fish are friends">
 </p>
 
 ---
 
-Sharkbait is a powerful CLI-based AI coding assistant built with Bun and TypeScript. It leverages Azure OpenAI to help you write, edit, and understand code directly from your terminal.
+> *"Just keep coding, just keep coding..."* — Dory, probably
 
-```
-                                                   :-=*                                             
-                                           .:+===**%@@%%                                            
-                                          :%@#++*###++++@%#                                         
-                                         -%%+++++++++++++*#+                                        
-                                        -@@+++++++++++++++*+++                                      
-                                       :+@+=++++++++*++**++**++                                     
-                                       =@%++=++++++++**+******++                                    
-                                       :#%==++++++*************++++=                                
-                                       :*@#++++**************+++*****+-                             
-                                        :+@@*************%%%#=-:::::::..:                           
-                                        ::=***********%%+--:::::::::.:-=--                          
-                                        -***********%#==----=****#***++++++=                        
-                                   ::--=%**********#=--==%%+++++++++++++++++=                       
-                                 -+%@#-+%*********#+:-+%*++++++++++=+++++++++=                      
-                              :=@#*+#%++%********#*:-+%*+++++++++++++++++++++++=                    
-                             -*%+=+++===##********--+%***+++++++++++++++++++++++=                   
-                             =%++++++===+#******%--=%****++++++++++++++++++++*+++                   
-                            -#%==++*====*#*****#+-=%*+************+++++++++**+++++                  
-                             #*+++**====*****+*#--#*++**************+++++++*+=::++                  
-                              ++#+**====%***++#==+#******************++++++++.....+                 
-                   +++++%#=====%++#+===*#**++**-=%*********=:....-****++++++*%%#:..=                
-        %@*++++++++++++**#@=--=##*#*+==#**+**#=-*#*******-:=#%%*:..+**++++++*@@@*+.:                
-     --%@*=+++++++++++***+*@=:-@%+++++*#*++*##==%******=--*#@@@%#-..+*+++++++#@**-.:+               
-    :=@%++====+++++++***+++*%=#%++*+++******#*=+#***#*+---**@@@@%=..+*++++++++--...-+               
-    :#%+++++++++++++++*+++++*#=%+**++*******#*+*****#*==---+**##=:::=**++++++++::::++=+++++         
-   :+@#===+++==+++++++**+++++%==%*++********#*+#****#*+==--------::-***+++++++++++++++++++++#%      
-   :*@#=++++++====+++++++++++*#-***++###*##*##+%********===-------*++*+++++++++++++++++++=++=+%%    
-   :=%%===+++===++++++++++++++#+=#**+#########+%#####***********+*******+++++++++++++*+++++++++%%   
-    -%%+=+++++++++++++++++++++*%=#**+#########+#######*******************++++++******+++++++++*@%   
-    -#@*+===++==+++++++++++++++#+=#**+########**#######*******###**#*************+***++++++++++%%   
-    :+@+++=+++++==+++++++++**++@#=+***+########+#########****#***#%%#########**++***++++++++++*@%   
-    .-%@+++===+++++++++++++*+*+*%:#+++++*######%**%########**************+++++****++++++++++++%@    
-    =-*@#+++=++++=+++++++++++*+   *#++++%%+*######+#%#######*********************++++++++++++%@     
-      :*@%++++=++=++++++++++++    :+@**%#====#**####+*##############**********+++++++++=++++%%      
-      :-+%@#++++++=+++++++++        -+#+-. .--=:+***+*#++*################*+++++++++++++++%@%       
-         :+%@%*=++=+++++++                   #**+******    *++++###*#***%#+++++++++++++#%%%         
-           -:-+%@@%*+++++                   #%++++ #**+                   *%@%%*%#%@@@@#            
-                 .--*%                      -#%#  -%#*                                              
-```
+Sharkbait is a CLI-based AI coding assistant built with Bun and TypeScript. Like Nemo escaping the dentist's fish tank, it helps you break free from tedious coding tasks and find your way back to the reef (production).
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/images/terminal-welcome.png">
+    <source media="(prefers-color-scheme: light)" srcset="public/images/terminal-welcome.png">
+    <img src="public/images/terminal-welcome.png" alt="Sharkbait Terminal" width="700" style="border-radius: 8px;">
+  </picture>
+</p>
 
 ## Features
 
-- 🚀 **Fast**: Built on Bun for instant startup and native TypeScript support
-- 🔧 **Tool-equipped**: File operations, shell commands, Git, GitHub integration
-- 🧠 **Smart context**: Intelligent context management with token optimization
-- 📋 **Task tracking**: Beads integration for persistent memory across sessions
-- 🎨 **Beautiful UI**: Ink-based terminal interface with colors and spinners
-- 🔒 **Safe**: Command reversibility classification and dangerous command blocking
+- 🐠 **Fast** — Built on Bun. Swims through code faster than Marlin crossing the EAC
+- 🔧 **Tool-equipped** — File ops, shell commands, Git, GitHub. Everything but the Ring of Fire
+- 🧠 **Smart context** — Remembers things better than Dory (token-optimized memory)
+- 📋 **Task tracking** — Beads integration for persistent memory. Unlike the Tank Gang's escape plans, these actually work
+- 🎨 **Beautiful UI** — Ink-based terminal interface. P. Sherman would approve
+- 🔒 **Safe** — Blocks dangerous commands. We're not gonna let you touch the bu— I mean, production
 
 ## Installation
 

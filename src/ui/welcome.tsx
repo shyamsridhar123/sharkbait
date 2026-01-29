@@ -23,7 +23,7 @@ export function WelcomeScreen({ version, workingDir }: WelcomeProps): React.JSX.
     <Box flexDirection="column" padding={1}>
       {/* Logo */}
       <Box justifyContent="center" marginBottom={1}>
-        <Logo variant="medium" />
+        <Logo variant="full" />
       </Box>
 
       {/* Version & Directory Info */}

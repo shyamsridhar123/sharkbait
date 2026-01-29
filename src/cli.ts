@@ -11,15 +11,22 @@ import { initProject } from "./commands/init";
 import { askQuestion } from "./commands/ask";
 import { runTask } from "./commands/run";
 
-// Read version from package.json
-const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
+// Version hardcoded for compiled binary compatibility
+const VERSION = "1.0.0";
+
+// Check if no args - start chat directly
+const args = process.argv.slice(2);
+if (args.length === 0) {
+  await startChat({});
+  process.exit(0);
+}
 
 const program = new Command();
 
 program
   .name("sharkbait")
   .description("AI coding assistant for the command line")
-  .version(pkg.version);
+  .version(VERSION);
 
 program
   .command("chat")

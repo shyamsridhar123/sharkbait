@@ -63,3 +63,9 @@ tests/
 *.test.ts
 *.spec.ts
 __tests__/
+
+# Games (generated demos)
+public/game/
+
+# Compiled binary
+sharkbait.exe

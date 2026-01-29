@@ -208,4 +208,49 @@ export const shellTools: Tool[] = [
       }
     },
   },
+  {
+    name: "open_file",
+    description: "Open a file or URL in the default application (browser, editor, etc)",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "File path or URL to open" },
+        application: { type: "string", description: "Optional: specific application to use (e.g., 'chrome', 'code')" },
+      },
+      required: ["path"],
+    },
+    async execute({ path, application }) {
+      const target = path as string;
+      const app = application as string | undefined;
+      
+      let cmd: string[];
+      
+      if (process.platform === "win32") {
+        if (app) {
+          // Use specific application
+          cmd = ["cmd", "/c", "start", "", app, target];
+        } else {
+          // Use default application - start command opens with default
+          cmd = ["cmd", "/c", "start", "", target];
+        }
+      } else if (process.platform === "darwin") {
+        cmd = app ? ["open", "-a", app, target] : ["open", target];
+      } else {
+        cmd = app ? [app, target] : ["xdg-open", target];
+      }
+      
+      try {
+        const proc = Bun.spawn(cmd, {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        
+        await proc.exited;
+        return { success: true, message: `Opened ${target}` };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to open";
+        return { success: false, error: message };
+      }
+    },
+  },
 ];

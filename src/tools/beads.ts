@@ -3,6 +3,26 @@
  */
 
 import type { Tool } from "./registry";
+import { homedir } from "os";
+import { join } from "path";
+
+// Find bd executable - check common locations
+function getBdPath(): string {
+  const paths = [
+    "bd", // In PATH
+    join(homedir(), "AppData", "Local", "beads", "bd.exe"), // Windows npm install location
+    join(homedir(), ".local", "bin", "bd"), // Linux/Mac user install
+    "/usr/local/bin/bd", // Mac homebrew
+  ];
+  
+  // For now, prefer the explicit path on Windows if it exists
+  if (process.platform === "win32") {
+    return paths[1]; // Windows path
+  }
+  return paths[0]; // Default to PATH
+}
+
+const BD_PATH = getBdPath();
 
 export const beadsTools: Tool[] = [
   {
@@ -15,7 +35,7 @@ export const beadsTools: Tool[] = [
     },
     async execute() {
       try {
-        const proc = Bun.spawn(["bd", "ready", "--json"], {
+        const proc = Bun.spawn([BD_PATH, "ready", "--json"], {
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -48,7 +68,7 @@ export const beadsTools: Tool[] = [
       required: ["title"],
     },
     async execute({ title, priority, parent }) {
-      const args = ["bd", "create", title as string];
+      const args = [BD_PATH, "create", title as string];
       
       if (priority !== undefined) {
         args.push("-p", String(priority));
@@ -90,7 +110,7 @@ export const beadsTools: Tool[] = [
     },
     async execute({ id }) {
       try {
-        const proc = Bun.spawn(["bd", "show", id as string, "--json"], {
+        const proc = Bun.spawn([BD_PATH, "show", id as string, "--json"], {
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -124,7 +144,7 @@ export const beadsTools: Tool[] = [
       const msg = (message as string) || "Completed";
       
       try {
-        const proc = Bun.spawn(["bd", "done", id as string, msg], {
+        const proc = Bun.spawn([BD_PATH, "close", id as string, "-m", msg], {
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -156,7 +176,7 @@ export const beadsTools: Tool[] = [
     async execute({ childId, parentId }) {
       try {
         const proc = Bun.spawn(
-          ["bd", "dep", "add", childId as string, parentId as string],
+          [BD_PATH, "dep", "add", childId as string, parentId as string],
           { stdout: "pipe", stderr: "pipe" }
         );
         
@@ -188,7 +208,7 @@ export const beadsTools: Tool[] = [
       required: [],
     },
     async execute({ status }) {
-      const args = ["bd", "list", "--json"];
+      const args = [BD_PATH, "list", "--json"];
       
       if (status && status !== "all") {
         args.push(`--${status}`);

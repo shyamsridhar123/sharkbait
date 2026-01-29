@@ -14,11 +14,13 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ 
-  model = "gpt-4o", 
+  model, 
   tokens = 0, 
   cost = 0,
   mode = "chat" 
 }: StatusBarProps): React.JSX.Element {
+  // Get model from config if not provided
+  const displayModel = model || process.env["AZURE_OPENAI_CODEX_DEPLOYMENT"] || process.env["AZURE_OPENAI_DEPLOYMENT"] || "unknown";
   const modeColors = {
     chat: colors.success,
     agent: colors.primary,
@@ -48,7 +50,7 @@ export function StatusBar({
       {/* Center - Model */}
       <Box>
         <Text color={colors.textMuted}>
-          Model: <Text color={colors.text}>{model}</Text>
+          Model: <Text color={colors.text}>{displayModel}</Text>
         </Text>
       </Box>
 
