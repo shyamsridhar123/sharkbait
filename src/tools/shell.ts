@@ -26,7 +26,7 @@ const ACTION_CLASSIFICATIONS: Array<[RegExp, ActionClassification]> = [
   [/>\s*\/dev\/sd/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
   [/mkfs/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
   [/dd\s+if=/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/:()\s*{\s*:\|:&\s*}/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
+  [/:\s*\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
   [/DROP\s+DATABASE/i, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
   [/TRUNCATE\s+TABLE/i, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
   [/DELETE\s+FROM\s+\w+\s*;?\s*$/i, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
@@ -68,7 +68,7 @@ const ACTION_CLASSIFICATIONS: Array<[RegExp, ActionClassification]> = [
 // Commands that should never be executed
 const BLOCKED_COMMANDS = [
   /rm\s+-rf\s+\/(?!\w)/, // rm -rf / (but not /path)
-  /:()\s*{\s*:\|:&\s*}/, // Fork bomb
+  /:\s*\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}/, // Fork bomb - flexible whitespace matching
   /dd\s+if=.*of=\/dev\/sd/, // Disk overwrite
   /chmod\s+777\s+\//, // Dangerous permissions on root
   /curl.*\|\s*(?:ba)?sh/, // Pipe curl to shell

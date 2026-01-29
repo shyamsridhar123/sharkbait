@@ -1,10 +1,9 @@
 /**
- * Azure OpenAI Client - Wrapper for Azure OpenAI API with streaming support
+ * Azure OpenAI Client - Wrapper for Azure OpenAI Responses API with streaming support
  */
 
 import { AzureOpenAI } from "openai";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import type { ChatChunk, ToolDefinition, Message, ToolCall } from "./types";
+import type { ChatChunk, ToolDefinition, Message } from "./types";
 import { log } from "../utils/logger";
 import { LLMError } from "../utils/errors";
 
@@ -38,47 +37,96 @@ export class AzureOpenAIClient {
     messages: Message[],
     tools?: ToolDefinition[]
   ): AsyncGenerator<ChatChunk> {
-    const openAIMessages: ChatCompletionMessageParam[] = messages.map(this.convertMessage);
+    // Extract system message for instructions
+    const systemMessages = messages.filter(m => m.role === "system");
+    const nonSystemMessages = messages.filter(m => m.role !== "system");
+    const instructions = systemMessages.map(m => m.content).join("\n\n") || undefined;
+    
+    // Convert messages to Responses API input format
+    const input = this.convertMessagesToInput(nonSystemMessages);
 
     let lastError: Error | null = null;
     
     for (let attempt = 0; attempt < this.maxRetries; attempt++) {
       try {
-        const toolsParam = tools ? tools.map(t => ({
+        // Build tools config for Responses API
+        const toolsConfig = tools ? tools.map(t => ({
           type: "function" as const,
-          function: {
-            name: t.name,
-            description: t.description,
-            parameters: t.parameters as Record<string, unknown>,
-          },
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters as Record<string, unknown>,
         })) : undefined;
         
-        const stream = await this.client.chat.completions.create({
+        // Use the Responses API with streaming
+        const stream = await this.client.responses.create({
           model: this.deployment,
-          messages: openAIMessages,
-          tools: toolsParam,
+          input: input,
+          instructions: instructions,
+          tools: toolsConfig,
           stream: true,
         });
 
-        for await (const chunk of stream) {
-          const choice = chunk.choices[0];
-          if (!choice) continue;
+        let currentToolCallId = "";
+        let currentToolCallName = "";
+        let currentToolCallArgs = "";
 
-          const toolCallsData = choice.delta?.tool_calls?.map(tc => ({
-            id: tc.id ?? "",
-            type: "function" as const,
-            function: {
-              name: tc.function?.name ?? "",
-              arguments: tc.function?.arguments ?? "",
-            },
-            index: tc.index,
-          }));
+        for await (const event of stream) {
+          // Handle different event types from Responses API
+          switch (event.type) {
+            case "response.output_text.delta":
+              yield {
+                content: (event as any).delta || "",
+                toolCalls: undefined,
+                finishReason: undefined,
+              };
+              break;
 
-          yield {
-            content: choice.delta?.content ?? "",
-            toolCalls: toolCallsData && toolCallsData.length > 0 ? toolCallsData : undefined,
-            finishReason: choice.finish_reason,
-          };
+            case "response.function_call_arguments.delta":
+              // Accumulate function call arguments
+              currentToolCallArgs += (event as any).delta || "";
+              break;
+
+            case "response.output_item.added":
+              // Track new function call
+              const item = (event as any).item;
+              if (item?.type === "function_call") {
+                currentToolCallId = item.call_id || "";
+                currentToolCallName = item.name || "";
+                currentToolCallArgs = "";
+              }
+              break;
+
+            case "response.output_item.done":
+              // Function call completed
+              const doneItem = (event as any).item;
+              if (doneItem?.type === "function_call" && currentToolCallName) {
+                yield {
+                  content: "",
+                  toolCalls: [{
+                    id: currentToolCallId,
+                    type: "function" as const,
+                    function: {
+                      name: currentToolCallName,
+                      arguments: currentToolCallArgs || doneItem.arguments || "",
+                    },
+                    index: 0,
+                  }],
+                  finishReason: "tool_calls",
+                };
+                currentToolCallId = "";
+                currentToolCallName = "";
+                currentToolCallArgs = "";
+              }
+              break;
+
+            case "response.completed":
+              yield {
+                content: "",
+                toolCalls: undefined,
+                finishReason: "stop",
+              };
+              break;
+          }
         }
         
         return; // Success, exit retry loop
@@ -100,34 +148,56 @@ export class AzureOpenAIClient {
     throw this.wrapError(lastError);
   }
 
-  private convertMessage(msg: Message): ChatCompletionMessageParam {
-    if (msg.role === "tool") {
-      return {
-        role: "tool",
-        tool_call_id: msg.tool_call_id ?? "",
-        content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
-      };
+  private convertMessagesToInput(messages: Message[]): string | object[] {
+    // For simple cases, just use the last user message as input
+    // For complex multi-turn, build conversation array
+    if (messages.length === 1 && messages[0].role === "user") {
+      return messages[0].content as string;
     }
 
-    if (msg.role === "assistant" && msg.tool_calls) {
-      return {
-        role: "assistant",
-        content: msg.content ?? null,
-        tool_calls: msg.tool_calls.map(tc => ({
-          id: tc.id,
-          type: "function" as const,
-          function: {
-            name: tc.function.name,
-            arguments: tc.function.arguments,
-          },
-        })),
-      };
+    // Convert to Responses API format for multi-turn
+    // The Responses API uses a different format than Chat Completions
+    const inputItems: object[] = [];
+    
+    for (const msg of messages) {
+      if (msg.role === "user") {
+        inputItems.push({
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: msg.content || "" }],
+        });
+      } else if (msg.role === "assistant") {
+        if (msg.tool_calls && msg.tool_calls.length > 0) {
+          // Add function calls as separate items
+          for (const tc of msg.tool_calls) {
+            inputItems.push({
+              type: "function_call",
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            });
+          }
+        }
+        if (msg.content) {
+          inputItems.push({
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: msg.content }],
+          });
+        }
+      } else if (msg.role === "tool") {
+        inputItems.push({
+          type: "function_call_output",
+          call_id: msg.tool_call_id,
+          output: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
+        });
+      } else if (msg.role === "system") {
+        // System messages become part of instructions, handled separately
+        // Skip here as we pass instructions parameter
+      }
     }
-
-    return {
-      role: msg.role as "system" | "user" | "assistant",
-      content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
-    };
+    
+    return inputItems;
   }
 
   private isRetryableError(error: unknown): boolean {

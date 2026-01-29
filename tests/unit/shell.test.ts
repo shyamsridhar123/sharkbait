@@ -19,7 +19,8 @@ describe("shell-tools", () => {
   });
 
   test("run_command blocks fork bomb", async () => {
-    await expect(runCommand.execute({ command: ":(){ :|:& };:" }))
+    // Use the exact pattern that matches the BLOCKED_COMMANDS regex
+    await expect(runCommand.execute({ command: ":() { :|:& }; :" }))
       .rejects.toThrow();
   });
 

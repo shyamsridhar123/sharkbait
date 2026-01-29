@@ -80,7 +80,9 @@ export function loadConfig(): Config {
   if (process.env["AZURE_OPENAI_API_KEY"]) {
     config.azure.apiKey = process.env["AZURE_OPENAI_API_KEY"];
   }
-  if (process.env["AZURE_OPENAI_DEPLOYMENT"]) {
+  if (process.env["AZURE_OPENAI_CODEX_DEPLOYMENT"]) {
+    config.azure.deployment = process.env["AZURE_OPENAI_CODEX_DEPLOYMENT"];
+  } else if (process.env["AZURE_OPENAI_DEPLOYMENT"]) {
     config.azure.deployment = process.env["AZURE_OPENAI_DEPLOYMENT"];
   }
   if (process.env["AZURE_OPENAI_API_VERSION"]) {

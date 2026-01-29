@@ -76,7 +76,9 @@ describe("file-ops", () => {
   test("list_directory lists files", async () => {
     const tool = fileTools.find(t => t.name === "list_directory")!;
     const result = await tool.execute({ path: TEST_DIR }) as string[];
-    expect(result).toContain("test-fixtures/test.txt");
+    // Normalize path separators for cross-platform compatibility
+    const normalized = result.map(p => p.replace(/\\/g, '/'));
+    expect(normalized).toContain("test-fixtures/test.txt");
   });
 
   test("create_directory creates nested directories", async () => {
