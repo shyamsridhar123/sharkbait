@@ -32,6 +32,7 @@ program
   .command("chat")
   .description("Start interactive chat session")
   .option("-c, --context <files...>", "Include specific files in context")
+  .option("-w, --working-dir <dir>", "Set working directory")
   .option("--no-beads", "Disable Beads task tracking")
   .action(startChat);
 

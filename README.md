@@ -180,6 +180,26 @@ bun run build:all
 | `SHARKBAIT_LOG_LEVEL` | Log level (debug/info/warn/error) | `info` |
 | `SHARKBAIT_MAX_CONTEXT_TOKENS` | Max context window tokens | `100000` |
 | `SHARKBAIT_CONFIRM_DESTRUCTIVE` | Require confirmation for destructive commands | `true` |
+| `SHARKBAIT_WORKING_DIR` | Default working directory | (current directory) |
+
+### Configuration File
+
+Sharkbait stores configuration in `~/.sharkbait/config.json`. Example:
+
+```json
+{
+  "azure": {
+    "deployment": "gpt-codex-5.2"
+  },
+  "features": {
+    "beads": true,
+    "confirmDestructive": true
+  },
+  "paths": {
+    "defaultWorkingDir": "/path/to/your/project"
+  }
+}
+```
 
 ## Security
 

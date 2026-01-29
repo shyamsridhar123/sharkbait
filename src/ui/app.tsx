@@ -12,6 +12,7 @@ import { StatusBar } from "./status-bar";
 import { InputPrompt } from "./input-prompt";
 import { InlineLogo } from "./logo";
 import { colors, box } from "./theme";
+import { getWorkingDir } from "../utils/config";
 import type { AgentEvent } from "../agent/types";
 
 interface Message {
@@ -24,9 +25,10 @@ interface AppProps {
   contextFiles?: string[];
   enableBeads?: boolean;
   version?: string;
+  workingDir?: string;  // Allow CLI to override working directory
 }
 
-export function App({ contextFiles, enableBeads = true, version = "1.0.0" }: AppProps): React.JSX.Element {
+export function App({ contextFiles, enableBeads = true, version = "1.0.0", workingDir: cliWorkingDir }: AppProps): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +37,7 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0" }: App
   const [tokenCount, setTokenCount] = useState(0);
   const { exit } = useApp();
 
-  const workingDir = process.cwd();
+  const workingDir = getWorkingDir(cliWorkingDir);
 
   const agent = React.useMemo(() => new Agent({
     contextFiles,

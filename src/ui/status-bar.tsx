@@ -50,14 +50,14 @@ export function StatusBar({
       {/* Center - Model */}
       <Box>
         <Text color={colors.textMuted}>
-          Model: <Text color={colors.text}>{displayModel}</Text>
+          ChatModel: <Text color={colors.text}>{displayModel}</Text>
         </Text>
       </Box>
 
       {/* Right side - Tokens & Cost */}
-      <Box>
+      <Box marginLeft={2}>
         <Text color={colors.textMuted}>
-          {tokens.toLocaleString()} tokens
+          <Text color={colors.text}>{tokens.toLocaleString()}</Text> tokens
           {cost > 0 && (
             <Text> | ${cost.toFixed(4)}</Text>
           )}

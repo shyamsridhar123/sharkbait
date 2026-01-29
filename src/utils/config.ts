@@ -25,6 +25,10 @@ export interface Config {
     maxContextTokens: number;
     maxIterations: number;
   };
+  paths: {
+    configDir: string;      // Default: ~/.sharkbait
+    defaultWorkingDir: string | null;  // Default working directory (null = use cwd)
+  };
 }
 
 let cachedConfig: Config | null = null;
@@ -33,6 +37,9 @@ export function loadConfig(): Config {
   if (cachedConfig) {
     return cachedConfig;
   }
+
+  // Config directory path
+  const configDir = join(homedir(), ".sharkbait");
 
   // 1. Start with defaults
   const config: Config = {
@@ -54,10 +61,14 @@ export function loadConfig(): Config {
       maxContextTokens: 100000,
       maxIterations: 50,
     },
+    paths: {
+      configDir,
+      defaultWorkingDir: null,
+    },
   };
 
   // 2. Load from global config file if exists
-  const globalConfigPath = join(homedir(), ".sharkbait", "config.json");
+  const globalConfigPath = join(configDir, "config.json");
   try {
     const globalConfig = require(globalConfigPath);
     Object.assign(config, globalConfig);
@@ -94,9 +105,46 @@ export function loadConfig(): Config {
   if (process.env["SHARKBAIT_CONFIRM_DESTRUCTIVE"]) {
     config.features.confirmDestructive = process.env["SHARKBAIT_CONFIRM_DESTRUCTIVE"] !== "false";
   }
+  if (process.env["SHARKBAIT_WORKING_DIR"]) {
+    config.paths.defaultWorkingDir = process.env["SHARKBAIT_WORKING_DIR"];
+  }
 
   cachedConfig = config;
   return config;
+}
+
+/**
+ * Get the effective working directory
+ * Priority: CLI option > env var > config file > process.cwd()
+ */
+export function getWorkingDir(cliOption?: string): string {
+  if (cliOption) {
+    return cliOption;
+  }
+  
+  const config = loadConfig();
+  if (config.paths.defaultWorkingDir) {
+    return config.paths.defaultWorkingDir;
+  }
+  
+  return process.cwd();
+}
+
+/**
+ * Get the config directory path (~/.sharkbait)
+ */
+export function getConfigDir(): string {
+  return join(homedir(), ".sharkbait");
+}
+
+/**
+ * Ensure the config directory exists
+ */
+export async function ensureConfigDir(): Promise<string> {
+  const configDir = getConfigDir();
+  const { mkdir } = await import("fs/promises");
+  await mkdir(configDir, { recursive: true });
+  return configDir;
 }
 
 export function validateConfig(config: Config): void {
