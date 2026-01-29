@@ -10,13 +10,28 @@ import { colors } from "./theme";
 
 // Try to load the logo from file
 function loadLogo(): string {
-  try {
-    const logoPath = path.join(process.cwd(), "public/images/ascii-art.txt");
-    return fs.readFileSync(logoPath, "utf8");
-  } catch {
-    // Fallback text logo if file not found
-    return TEXT_LOGO;
+  const possiblePaths = [
+    // From sharkbait project directory (when running via bun from source)
+    path.join(__dirname, "../../public/images/ascii-art.txt"),
+    path.join(__dirname, "../public/images/ascii-art.txt"),
+    // Hardcoded sharkbait install location
+    "C:/Users/shyamsridhar/code/sharkbait/sharkbait/public/images/ascii-art.txt",
+    // From current working directory (legacy)
+    path.join(process.cwd(), "public/images/ascii-art.txt"),
+  ];
+  
+  for (const logoPath of possiblePaths) {
+    try {
+      if (fs.existsSync(logoPath)) {
+        return fs.readFileSync(logoPath, "utf8");
+      }
+    } catch {
+      // Try next path
+    }
   }
+  
+  // Fallback text logo if file not found
+  return TEXT_LOGO;
 }
 
 // Simple text-based logo fallback
@@ -31,10 +46,10 @@ const TEXT_LOGO = `
 
 interface LogoProps {
   variant?: "full" | "medium" | "compact" | "inline";
-  showTagline?: boolean;
+  version?: string;
 }
 
-export function Logo({ variant = "full", showTagline = true }: LogoProps): React.JSX.Element {
+export function Logo({ variant = "full", version = "0.1.0" }: LogoProps): React.JSX.Element {
   // Always try to load the actual ASCII art for full and medium
   const logoText = variant === "inline" ? "" : loadLogo();
 
@@ -42,12 +57,10 @@ export function Logo({ variant = "full", showTagline = true }: LogoProps): React
     <Box flexDirection="column" alignItems="center">
       <Text color={colors.primary}>{logoText}</Text>
       {variant !== "inline" && (
-        <Box marginTop={1}>
+        <Box marginTop={0}>
           <Text bold color={colors.primary}>SHARKBAIT</Text>
+          <Text color={colors.textMuted}> v{version}</Text>
         </Box>
-      )}
-      {showTagline && variant !== "inline" && (
-        <Text color={colors.textMuted}>AI Coding Assistant</Text>
       )}
     </Box>
   );

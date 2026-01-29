@@ -20,22 +20,21 @@ export function WelcomeScreen({ version, workingDir }: WelcomeProps): React.JSX.
   ];
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" padding={0}>
       {/* Logo */}
-      <Box justifyContent="center" marginBottom={1}>
-        <Logo variant="full" />
+      <Box justifyContent="center" marginBottom={0}>
+        <Logo variant="full" version={version} />
       </Box>
 
-      {/* Version & Directory Info */}
-      <Box flexDirection="column" alignItems="center" marginBottom={1}>
-        <Text color={colors.textMuted}>v{version}</Text>
+      {/* Directory Info */}
+      <Box flexDirection="column" alignItems="center" marginBottom={0}>
         <Text color={colors.textDim}>
           Working in: <Text color={colors.textMuted}>{workingDir}</Text>
         </Text>
       </Box>
 
       {/* Divider */}
-      <Box justifyContent="center" marginY={1}>
+      <Box justifyContent="center" marginY={0}>
         <Text color={colors.border}>
           {box.horizontal.repeat(50)}
         </Text>
@@ -51,7 +50,7 @@ export function WelcomeScreen({ version, workingDir }: WelcomeProps): React.JSX.
       </Box>
 
       {/* Divider */}
-      <Box justifyContent="center" marginY={1}>
+      <Box justifyContent="center" marginY={0}>
         <Text color={colors.border}>
           {box.horizontal.repeat(50)}
         </Text>

@@ -69,16 +69,27 @@ export class AzureOpenAIClient {
         let currentToolCallId = "";
         let currentToolCallName = "";
         let currentToolCallArgs = "";
+        let streamedTextLength = 0; // Track how much text we've already streamed
 
         for await (const event of stream) {
+          // Debug logging for all events
+          log.debug(`LLM event: ${event.type}`, event);
+          
           // Handle different event types from Responses API
           switch (event.type) {
             case "response.output_text.delta":
-              yield {
-                content: (event as any).delta || "",
-                toolCalls: undefined,
-                finishReason: undefined,
-              };
+            case "response.content_part.delta":
+            case "response.text.delta":
+              // Handle various text delta event types
+              const textDelta = (event as any).delta || (event as any).text || "";
+              if (textDelta) {
+                streamedTextLength += textDelta.length;
+                yield {
+                  content: textDelta,
+                  toolCalls: undefined,
+                  finishReason: undefined,
+                };
+              }
               break;
 
             case "response.function_call_arguments.delta":
@@ -120,11 +131,33 @@ export class AzureOpenAIClient {
               break;
 
             case "response.completed":
+              // Only extract final text if nothing was streamed (fallback for non-streaming responses)
+              const completedResponse = (event as any).response;
+              if (streamedTextLength === 0 && completedResponse?.output) {
+                for (const outputItem of completedResponse.output) {
+                  if (outputItem.type === "message" && outputItem.content) {
+                    for (const contentPart of outputItem.content) {
+                      if (contentPart.type === "output_text" && contentPart.text) {
+                        yield {
+                          content: contentPart.text,
+                          toolCalls: undefined,
+                          finishReason: undefined,
+                        };
+                      }
+                    }
+                  }
+                }
+              }
               yield {
                 content: "",
                 toolCalls: undefined,
                 finishReason: "stop",
               };
+              break;
+              
+            default:
+              // Log unhandled event types for debugging
+              log.debug(`Unhandled LLM event type: ${event.type}`);
               break;
           }
         }

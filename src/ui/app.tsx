@@ -2,7 +2,7 @@
  * Main App Component - Claude Code inspired UI
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Box, Text, useInput, useApp } from "ink";
 import { Agent } from "../agent/agent";
 import { MessageView } from "./message";
@@ -13,6 +13,8 @@ import { InputPrompt } from "./input-prompt";
 import { InlineLogo } from "./logo";
 import { colors, box } from "./theme";
 import { getWorkingDir } from "../utils/config";
+import { executeCommand } from "./commands";
+import type { CommandContext } from "./commands";
 import type { AgentEvent } from "../agent/types";
 
 interface Message {
@@ -28,7 +30,7 @@ interface AppProps {
   workingDir?: string;  // Allow CLI to override working directory
 }
 
-export function App({ contextFiles, enableBeads = true, version = "1.0.0", workingDir: cliWorkingDir }: AppProps): React.JSX.Element {
+export function App({ contextFiles: initialContextFiles, enableBeads: initialBeadsEnabled = true, version = "0.1.0", workingDir: cliWorkingDir }: AppProps): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -37,14 +39,35 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
   const [tokenCount, setTokenCount] = useState(0);
   const [currentDir, setCurrentDir] = useState(() => getWorkingDir(cliWorkingDir));
   const [pendingConfirm, setPendingConfirm] = useState<{ type: string; data: any } | null>(null);
+  const [beadsEnabled, setBeadsEnabled] = useState(initialBeadsEnabled);
+  const [contextFiles, setContextFiles] = useState<string[]>(initialContextFiles || []);
   const { exit } = useApp();
 
   const workingDir = currentDir;
 
   const agent = React.useMemo(() => new Agent({
     contextFiles,
-    enableBeads,
-  }), [contextFiles, enableBeads]);
+    enableBeads: beadsEnabled,
+  }), [contextFiles, beadsEnabled]);
+
+  // Build command context for slash commands
+  const commandContext: CommandContext = React.useMemo(() => ({
+    currentDir,
+    setCurrentDir,
+    addMessage: (role, content) => {
+      setMessages(prev => [...prev, { role, content, timestamp: new Date() }]);
+    },
+    clearMessages: () => setMessages([]),
+    showWelcome: () => setShowWelcome(true),
+    agent,
+    version,
+    exit,
+    setPendingConfirm,
+    beadsEnabled,
+    setBeadsEnabled,
+    contextFiles,
+    setContextFiles,
+  }), [currentDir, agent, version, exit, beadsEnabled, contextFiles]);
 
   useInput((inputChar, key) => {
     if (key.escape) {
@@ -66,103 +89,6 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
       setInput(prev => prev + inputChar);
     }
   });
-
-  // Handle slash commands
-  function handleSlashCommand(command: string): boolean {
-    const parts = command.slice(1).split(/\s+/);
-    const cmd = parts[0]?.toLowerCase();
-    const args = parts.slice(1).join(" ");
-
-    switch (cmd) {
-      case "cd": {
-        if (!args) {
-          setMessages(prev => [...prev, {
-            role: "system",
-            content: `Current directory: ${currentDir}\n\nUsage: /cd <path>`,
-            timestamp: new Date()
-          }]);
-          return true;
-        }
-        
-        // Resolve path (handle relative paths)
-        const { resolve, isAbsolute } = require("path");
-        const { existsSync, statSync, mkdirSync } = require("fs");
-        
-        const newPath = isAbsolute(args) ? args : resolve(currentDir, args);
-        
-        if (!existsSync(newPath)) {
-          // Directory doesn't exist - ask for permission to create it
-          setMessages(prev => [...prev, {
-            role: "system",
-            content: `Directory not found: ${newPath}\n\nCreate it? Type 'y' or 'yes' to create, anything else to cancel.`,
-            timestamp: new Date()
-          }]);
-          setPendingConfirm({ type: "mkdir", data: { path: newPath } });
-          return true;
-        }
-        
-        try {
-          const stat = statSync(newPath);
-          if (!stat.isDirectory()) {
-            setMessages(prev => [...prev, {
-              role: "system",
-              content: `Error: Not a directory: ${newPath}`,
-              timestamp: new Date()
-            }]);
-            return true;
-          }
-        } catch {
-          setMessages(prev => [...prev, {
-            role: "system",
-            content: `Error: Cannot access: ${newPath}`,
-            timestamp: new Date()
-          }]);
-          return true;
-        }
-        
-        // Change directory
-        process.chdir(newPath);
-        setCurrentDir(newPath);
-        setMessages(prev => [...prev, {
-          role: "system",
-          content: `Changed directory to: ${newPath}`,
-          timestamp: new Date()
-        }]);
-        return true;
-      }
-      
-      case "pwd": {
-        setMessages(prev => [...prev, {
-          role: "system",
-          content: `Current directory: ${currentDir}`,
-          timestamp: new Date()
-        }]);
-        return true;
-      }
-      
-      case "help": {
-        setMessages(prev => [...prev, {
-          role: "system",
-          content: `Available commands:
-  /cd <path>  - Change working directory
-  /pwd        - Show current working directory
-  /clear      - Clear message history
-  /help       - Show this help message`,
-          timestamp: new Date()
-        }]);
-        return true;
-      }
-      
-      case "clear": {
-        setMessages([]);
-        setShowWelcome(true);
-        return true;
-      }
-      
-      default:
-        return false;
-    }
-  }
 
   // Handle pending confirmation responses
   function handleConfirmation(response: string): boolean {
@@ -220,21 +146,29 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
       return;
     }
 
-    // Handle slash commands
-    if (userMessage.startsWith("/")) {
+    // Handle slash commands (and common shortcuts like "cd" without slash)
+    const lowerMessage = userMessage.toLowerCase();
+    if (userMessage.startsWith("/") || lowerMessage.startsWith("cd ") || lowerMessage === "cd" || lowerMessage === "pwd") {
       setInput("");
-      if (handleSlashCommand(userMessage)) {
+      // Normalize: add "/" if missing for known commands
+      let normalizedCommand = userMessage;
+      if (!userMessage.startsWith("/")) {
+        normalizedCommand = "/" + userMessage;
+      }
+      
+      // Use the command registry
+      const result = await executeCommand(normalizedCommand, commandContext);
+      if (result.handled) {
+        if (result.message) {
+          setMessages(prev => [...prev, {
+            role: "system",
+            content: result.message!,
+            timestamp: new Date()
+          }]);
+        }
         if (showWelcome) setShowWelcome(false);
         return;
       }
-      // Unknown command - show error
-      setMessages(prev => [...prev, {
-        role: "system",
-        content: `Unknown command: ${userMessage.split(/\s+/)[0]}\nType /help for available commands.`,
-        timestamp: new Date()
-      }]);
-      if (showWelcome) setShowWelcome(false);
-      return;
     }
 
     // Hide welcome screen on first message
@@ -289,12 +223,12 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
   }
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" padding={0}>
       {/* Welcome Screen or Header */}
       {showWelcome ? (
         <WelcomeScreen version={version} workingDir={workingDir} />
       ) : (
-        <Box marginBottom={1} justifyContent="space-between">
+        <Box marginBottom={0} justifyContent="space-between">
           <InlineLogo />
           <Text color={colors.textDim}>v{version}</Text>
         </Box>
@@ -302,7 +236,7 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
 
       {/* Messages */}
       {!showWelcome && (
-        <Box flexDirection="column" marginBottom={1}>
+        <Box flexDirection="column" marginBottom={0}>
           {messages.map((msg, i) => (
             <MessageView 
               key={i} 
@@ -319,7 +253,7 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
       )}
 
       {/* Loading or Input */}
-      <Box marginTop={1}>
+      <Box marginTop={0}>
         {isLoading ? (
           <Box marginLeft={1}>
             <Spinner text="Thinking..." showTokens={true} tokens={tokenCount} />
@@ -330,12 +264,12 @@ export function App({ contextFiles, enableBeads = true, version = "1.0.0", worki
       </Box>
 
       {/* Status Bar */}
-      <Box marginTop={1}>
+      <Box marginTop={0}>
         <StatusBar mode="chat" tokens={tokenCount} />
       </Box>
 
       {/* Help hint */}
-      <Box marginTop={1} justifyContent="center">
+      <Box marginTop={0} justifyContent="center">
         <Text color={colors.textDim}>
           Press <Text color={colors.primary}>ESC</Text> to exit • 
           <Text color={colors.primary}> Enter</Text> to send

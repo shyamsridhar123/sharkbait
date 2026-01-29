@@ -25,7 +25,7 @@ export async function startChat(options: ChatOptions = {}): Promise<void> {
     React.createElement(App, {
       contextFiles: options.context,
       enableBeads: options.beads ?? true,
-      version: "1.0.0",
+      version: "0.1.0",
       workingDir,
     })
   );
