@@ -10,6 +10,7 @@ import { startChat } from "./agent";
 import { initProject } from "./commands/init";
 import { askQuestion } from "./commands/ask";
 import { runTask } from "./commands/run";
+import { runSetup } from "./commands/setup";
 
 // Version hardcoded for compiled binary compatibility
 const VERSION = "1.0.0";
@@ -52,5 +53,10 @@ program
   .description("Execute a task autonomously")
   .option("--dry-run", "Show what would be done without doing it")
   .action(runTask);
+
+program
+  .command("setup")
+  .description("Interactive setup wizard for configuring Sharkbait")
+  .action(runSetup);
 
 program.parse();
