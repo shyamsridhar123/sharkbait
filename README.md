@@ -199,9 +199,76 @@ bun run build:all
 | `AZURE_OPENAI_DEPLOYMENT` | Model deployment name | `gpt-codex-5.2` |
 | `AZURE_OPENAI_API_VERSION` | API version | `2024-10-21` |
 | `SHARKBAIT_LOG_LEVEL` | Log level (debug/info/warn/error) | `info` |
+| `SHARKBAIT_LOG_FILE` | Enable file logging to ~/.sharkbait/logs | `false` |
+| `SHARKBAIT_LOG_JSON` | Use JSON format for console output | `false` |
+| `SHARKBAIT_LOG_DIR` | Custom log file directory | `~/.sharkbait/logs` |
+| `SHARKBAIT_TELEMETRY` | Enable opt-in anonymous telemetry | `false` |
 | `SHARKBAIT_MAX_CONTEXT_TOKENS` | Max context window tokens | `100000` |
 | `SHARKBAIT_CONFIRM_DESTRUCTIVE` | Require confirmation for destructive commands | `true` |
 | `SHARKBAIT_WORKING_DIR` | Default working directory | (current directory) |
+
+## Logging & Monitoring
+
+Sharkbait includes a comprehensive observability stack:
+
+### Structured Logging
+
+```bash
+# Enable debug logging
+export SHARKBAIT_LOG_LEVEL=debug
+
+# Enable file logging (writes to ~/.sharkbait/logs/sharkbait.log)
+export SHARKBAIT_LOG_FILE=true
+
+# Use JSON format for machine-readable logs
+export SHARKBAIT_LOG_JSON=true
+```
+
+Log output includes timestamps, levels, and contextual information:
+```
+[18:55:21.545] [INFO ] [coder] Agent started processing
+[18:55:21.560] [INFO ] config.load (8ms)
+```
+
+### File Logging
+
+When enabled, logs are written as newline-delimited JSON:
+```json
+{"timestamp":"2026-01-29T18:55:21.545Z","level":"info","message":"Agent started","context":{"agent":"coder","correlationId":"abc123"}}
+```
+
+Features:
+- Automatic rotation at 10MB (keeps 5 files)
+- Structured JSON for easy parsing
+- Context propagation (agent, tool, correlationId)
+
+### Performance Monitoring
+
+Built-in metrics track:
+- LLM call latencies (avg, p50, p90, p99)
+- Tool execution times
+- Memory usage
+- Token consumption
+
+### Distributed Tracing
+
+Trace agent execution with OpenTelemetry-inspired spans:
+```
+✓ [agent] coder (1250ms)
+  ✓ [llm] gpt-codex-5.2 (800ms)
+  ✓ [tool] file_read (45ms)
+  ✓ [tool] file_write (120ms)
+```
+
+### Telemetry (Opt-in)
+
+Anonymous usage analytics can be enabled to help improve Sharkbait:
+```bash
+export SHARKBAIT_TELEMETRY=true
+```
+
+**What's collected:** Event counts (sessions, tool usage), latency metrics
+**What's NOT collected:** File paths, code content, prompts, personal info
 
 ### Configuration File
 
