@@ -56,3 +56,10 @@ pids/
 *.pid
 *.seed
 *.pid.lock
+
+# Test files
+test/
+tests/
+*.test.ts
+*.spec.ts
+__tests__/
