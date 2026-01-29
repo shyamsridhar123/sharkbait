@@ -20,14 +20,27 @@
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/runtime-Bun-orange.svg" alt="Bun">
   <img src="https://img.shields.io/badge/language-TypeScript-blue.svg" alt="TypeScript">
+  <img src="https://img.shields.io/badge/status-experimental-red.svg" alt="Experimental">
   <img src="https://img.shields.io/badge/fish_are_friends-not_food-brightgreen.svg" alt="Fish are friends">
 </p>
 
 ---
 
+> ⚠️ **Experimental**: This project is under active development. APIs may change, features may break, and Dory might forget what she was doing. Use at your own risk!
+
 > *"Just keep coding, just keep coding..."* — Dory, probably
 
-Sharkbait is a CLI-based AI coding assistant built with Bun and TypeScript. Like Nemo escaping the dentist's fish tank, it helps you break free from tedious coding tasks and find your way back to the reef (production).
+Sharkbait is a CLI-based AI coding assistant built with Bun and TypeScript. Like Nemo escaping the dentist's fish tank, it helps you break free from tedious coding tasks.
+
+### 🧠 The Memory Problem
+
+Most AI coding assistants have the memory of... well, Dory. They forget context between sessions, lose track of what you were working on, and make you repeat yourself constantly.
+
+**Sharkbait is different.** Built-in **Beads** provide persistent, git-backed memory that survives across sessions:
+
+- **Task Memory**: Create a bead for a feature, and Sharkbait remembers the context, decisions, and progress — even after you close the terminal
+- **Git-Native**: Beads are stored alongside your code in git, so your AI's memory travels with your repo
+- **No External Services**: Your context stays local. No cloud sync, no API calls for memory — just git
 
 <p align="center">
   <picture>
@@ -41,10 +54,10 @@ Sharkbait is a CLI-based AI coding assistant built with Bun and TypeScript. Like
 
 - 🐠 **Fast** — Built on Bun. Swims through code faster than Marlin crossing the EAC
 - 🔧 **Tool-equipped** — File ops, shell commands, Git, GitHub. Everything but the Ring of Fire
-- 🧠 **Smart context** — Remembers things better than Dory (token-optimized memory)
-- 📋 **Task tracking** — Beads integration for persistent memory. Unlike the Tank Gang's escape plans, these actually work
+- 🧠 **Persistent Memory** — Beads give your AI long-term memory that survives sessions (unlike Dory)
+- 📋 **Git-backed Context** — Your AI's memory lives in your repo. Clone it, branch it, merge it
 - 🎨 **Beautiful UI** — Ink-based terminal interface. P. Sherman would approve
-- 🔒 **Safe** — Blocks dangerous commands. We're not gonna let you touch the bu— I mean, production
+- 🔒 **Safe** — Confirms dangerous operations before executing. No surprise `rm -rf` moments
 
 ## Installation
 
@@ -67,7 +80,6 @@ bun run build:binary
 - **Bun** >= 1.0.0
 - **Git** >= 2.30
 - **gh** (GitHub CLI) >= 2.40 (optional, for GitHub features)
-- **bd** (Beads) >= 0.49 (optional, for task tracking)
 - Azure OpenAI API access
 
 ## Configuration
