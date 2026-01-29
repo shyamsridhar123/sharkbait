@@ -1,7 +1,7 @@
 ---
 id: SB-014
 title: Create Nemo ASCII art
-status: In Progress
+status: Completed
 assignee: []
 created_date: '2026-01-29'
 labels: []
