@@ -1,4 +1,4 @@
-# Subagents Implementation
+# ~~Subagents Implementation~~ → Prompting Modes System
 
 | Field | Value |
 |-------|-------|
@@ -6,26 +6,46 @@
 | Status | todo |
 | Priority | medium |
 | Created | 2025-01-13 |
+| Updated | 2026-01-28 |
+
+## ⚠️ Architecture Change Notice
+
+**Original plan (19 subagents) has been replaced with Prompting Modes.**
+
+Per Anthropic's "Building Effective Agents" guidance:
+> "We recommend finding the simplest solution possible, and only increasing complexity when needed."
+
+**Why the change:**
+- Subagents add latency and cost (separate LLM calls)
+- Context is lost during handoffs
+- Harder to test and debug
+- Prompting modes achieve same specialization with single agent
 
 ## Description
 
-Implement 19 specialized subagents across categories:
+Implement **prompting modes** for primary agents instead of separate subagents:
 
-**Analysis Subagents (5):**
-- code-analyzer, test-analyzer, dependency-mapper, security-scanner, performance-profiler
+| Agent | Modes |
+|-------|-------|
+| `coder` | `--mode=write`, `--mode=refactor`, `--mode=test`, `--mode=docs` |
+| `reviewer` | `--mode=bugs`, `--mode=security`, `--mode=style`, `--mode=performance` |
+| `planner` | `--mode=architecture`, `--mode=tasks`, `--mode=estimate` |
+| `debugger` | `--mode=trace`, `--mode=hypothesis`, `--mode=fix` |
+| `explorer` | `--mode=map`, `--mode=dependencies`, `--mode=patterns` |
 
-**Generation Subagents (6):**
-- code-generator, test-generator, doc-generator, commit-message-generator, pr-description-generator, migration-generator
-
-**Validation Subagents (4):**
-- syntax-validator, type-checker, lint-runner, test-runner
-
-**Git Subagents (4):**
-- diff-analyzer, conflict-resolver, history-searcher, blame-tracker
+**Implementation:**
+- Modes are system prompt injections, not separate agents
+- Single agent maintains full context
+- Same model can run multiple modes in parallel
 
 ## Acceptance Criteria
 
-- [ ] All 19 subagents implemented
-- [ ] Focused tool sets per subagent
-- [ ] Integration with primary agents
-- [ ] Consistent result formatting
+- [ ] Mode system implemented for all 5 primary agents
+- [ ] System prompt injection for mode-specific behavior
+- [ ] Mode-specific confidence thresholds (reviewer modes)
+- [ ] Parallel mode execution support
+- [ ] Mode documentation and usage examples
+
+## References
+
+- AGENT_ARCHITECTURE.md Section 6: Prompting Modes
