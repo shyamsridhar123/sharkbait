@@ -12,6 +12,9 @@
     "build:binary": "bun build src/cli.ts --compile --outfile sharkbait",
     "build:all": "bun run scripts/build-all.ts",
     "test": "bun test",
+    "test:e2e": "bun run tests/e2e/real-e2e-tests.ts",
+    "test:llm": "bun run scripts/test-llm-connection.ts",
+    "test:agent": "bun run scripts/test-agent-loop.ts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
