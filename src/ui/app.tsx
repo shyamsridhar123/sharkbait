@@ -13,11 +13,12 @@ import { StatusBar } from "./status-bar";
 import { InputPrompt } from "./input-prompt";
 import { InlineLogo } from "./logo";
 import { ToolCallView } from "./tool-call";
+import { ParallelProgressView } from "./parallel-progress";
 import { colors, box, icons } from "./theme";
 import { getWorkingDir } from "../utils/config";
 import { executeCommand } from "./commands";
 import type { CommandContext } from "./commands";
-import type { AgentEvent } from "../agent/types";
+import type { AgentEvent, ParallelAgentProgress } from "../agent/types";
 import { basename } from "path";
 
 /**
@@ -99,6 +100,11 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
   const [activeToolCalls, setActiveToolCalls] = useState<TrackedToolCall[]>([]);
   const [currentAgent, setCurrentAgent] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [parallelProgress, setParallelProgress] = useState<{
+    agents: ParallelAgentProgress[];
+    strategy: "all" | "race" | "quorum";
+  } | null>(null);
+  const [thinkingMessage, setThinkingMessage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const { exit } = useApp();
 
@@ -316,6 +322,38 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             }]);
             break;
             
+          case "thinking":
+            setThinkingMessage(event.message || `${event.agent} is thinking...`);
+            break;
+            
+          case "parallel_start":
+            setParallelProgress({
+              agents: event.agents,
+              strategy: event.strategy,
+            });
+            setMessages(prev => [...prev, {
+              role: "system",
+              content: `🔀 Starting parallel execution (${event.strategy} strategy) with ${event.agents.length} agents...`,
+              timestamp: new Date()
+            }]);
+            break;
+            
+          case "parallel_progress":
+            setParallelProgress(prev => prev ? {
+              ...prev,
+              agents: event.agents,
+            } : null);
+            break;
+            
+          case "parallel_complete":
+            setParallelProgress(null);
+            setMessages(prev => [...prev, {
+              role: "system",
+              content: `✅ Parallel execution complete:\n${event.consolidated}`,
+              timestamp: new Date()
+            }]);
+            break;
+            
           case "tool_start": {
             const toolInfo = formatToolInfo(event.name, event.args);
             const newTool: TrackedToolCall = {
@@ -388,6 +426,8 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             setCurrentOutput("");
             setActiveToolCalls([]);
             setCurrentAgent(null);
+            setThinkingMessage(null);
+            setParallelProgress(null);
             break;
             
           case "error":
@@ -473,6 +513,15 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             </Box>
           )}
           
+          {/* Parallel execution progress */}
+          {parallelProgress && (
+            <ParallelProgressView
+              title="Parallel Execution"
+              agents={parallelProgress.agents}
+              strategy={parallelProgress.strategy}
+            />
+          )}
+          
           {currentOutput && (
             <MessageView role="assistant" content={currentOutput} />
           )}
@@ -484,7 +533,7 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
         {isLoading ? (
           <Box flexDirection="column" marginLeft={1}>
             <Spinner 
-              text={currentAgent ? `${currentAgent} thinking...` : "Thinking..."} 
+              text={thinkingMessage || (currentAgent ? `${currentAgent} thinking...` : "Thinking...")} 
               showTokens={true} 
               tokens={tokenCount} 
             />

@@ -38,7 +38,7 @@ Build the terminal UI using ink (React for CLI):
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
 | SB-011.06 | Implement syntax highlighting | todo | MEDIUM |
-| SB-011.10 | Implement parallel execution UI | ✅ done | MEDIUM |
+| SB-011.10 | Implement parallel execution UI | in-progress | MEDIUM |
 | SB-011.13 | Implement Beads task display | todo | MEDIUM |
 | SB-011.14 | Implement GitHub PR/Issue UI | todo | MEDIUM |
 
