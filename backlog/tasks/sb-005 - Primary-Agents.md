@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | ID | SB-005 |
-| Status | todo |
+| Status | Completed |
 | Priority | high |
 | Created | 2025-01-13 |
 

@@ -1,8 +1,9 @@
 /**
  * Main App Component - Claude Code inspired UI
+ * Enhanced with tool visualization, token tracking, and Ctrl+C handling
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Box, Text, useInput, useApp } from "ink";
 import { Agent } from "../agent/agent";
 import { MessageView } from "./message";
@@ -11,12 +12,20 @@ import { WelcomeScreen } from "./welcome";
 import { StatusBar } from "./status-bar";
 import { InputPrompt } from "./input-prompt";
 import { InlineLogo } from "./logo";
-import { colors, box } from "./theme";
+import { ToolCallView } from "./tool-call";
+import { colors, box, icons } from "./theme";
 import { getWorkingDir } from "../utils/config";
 import { executeCommand } from "./commands";
 import type { CommandContext } from "./commands";
 import type { AgentEvent } from "../agent/types";
 import { basename } from "path";
+
+/**
+ * Estimate token count from text (~4 chars per token)
+ */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
 
 /**
  * Format tool info with relevant details (like file paths)
@@ -47,10 +56,25 @@ function formatToolInfo(name: string, args?: Record<string, unknown>): string {
   return name;
 }
 
+/**
+ * Tracked tool call with timing info
+ */
+interface TrackedToolCall {
+  id: string;
+  name: string;
+  displayName: string;
+  status: "running" | "success" | "error";
+  startTime: number;
+  duration?: number;
+  result?: string;
+  error?: string;
+}
+
 interface Message {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp?: Date;
+  toolCalls?: TrackedToolCall[];
 }
 
 interface AppProps {
@@ -67,10 +91,15 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
   const [currentOutput, setCurrentOutput] = useState("");
   const [showWelcome, setShowWelcome] = useState(true);
   const [tokenCount, setTokenCount] = useState(0);
+  const [sessionCost, setSessionCost] = useState(0);
   const [currentDir, setCurrentDir] = useState(() => getWorkingDir(cliWorkingDir));
   const [pendingConfirm, setPendingConfirm] = useState<{ type: string; data: any } | null>(null);
   const [beadsEnabled, setBeadsEnabled] = useState(initialBeadsEnabled);
   const [contextFiles, setContextFiles] = useState<string[]>(initialContextFiles || []);
+  const [activeToolCalls, setActiveToolCalls] = useState<TrackedToolCall[]>([]);
+  const [currentAgent, setCurrentAgent] = useState<string | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { exit } = useApp();
 
   const workingDir = currentDir;
@@ -100,6 +129,27 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
   }), [currentDir, agent, version, exit, beadsEnabled, contextFiles]);
 
   useInput((inputChar, key) => {
+    // Handle Ctrl+C - cancel operation or exit
+    if (key.ctrl && inputChar === "c") {
+      if (isExecuting && abortControllerRef.current) {
+        // Cancel current operation
+        abortControllerRef.current.abort();
+        setMessages(prev => [...prev, {
+          role: "system",
+          content: "⚠️ Operation cancelled",
+          timestamp: new Date()
+        }]);
+        setIsLoading(false);
+        setIsExecuting(false);
+        setCurrentOutput("");
+        setActiveToolCalls([]);
+      } else if (!input.trim()) {
+        // Exit if at empty prompt
+        exit();
+      }
+      return;
+    }
+
     if (key.escape) {
       exit();
       return;

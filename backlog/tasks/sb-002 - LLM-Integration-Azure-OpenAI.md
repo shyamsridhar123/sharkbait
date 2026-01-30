@@ -1,7 +1,7 @@
 ---
 id: SB-002
 title: LLM Integration (Azure OpenAI)
-status: To Do
+status: Completed
 assignee: []
 created_date: '2026-01-29 05:34'
 labels: []
