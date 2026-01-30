@@ -130,19 +130,47 @@ sharkbait init
 
 During an interactive chat session, use slash commands for quick actions:
 
+### Navigation
 | Command | Description |
 |---------|-------------|
 | `/cd <path>` | Change working directory (creates if needed) |
 | `/pwd` | Show current working directory |
-| `/clear` | Clear message history |
-| `/help` | Show available commands |
 
-**Example:** Change to a new project directory:
+### Session
+| Command | Description |
+|---------|-------------|
+| `/clear` | Clear message history |
+| `/exit` | Exit Sharkbait (aliases: `/quit`, `/q`) |
+
+### Configuration
+| Command | Description |
+|---------|-------------|
+| `/beads [on\|off]` | Toggle or check Beads task tracking |
+| `/model [name]` | Show or switch the LLM model |
+| `/tasks` | Show Beads task status |
+| `/context [add\|remove\|list]` | Manage context files |
+
+### Actions
+| Command | Description |
+|---------|-------------|
+| `/setup` | Launch interactive setup wizard |
+| `/init` | Initialize Sharkbait in current directory |
+| `/ask <question>` | Ask a one-off question |
+| `/run <task>` | Execute a task autonomously |
+| `/review <file>` | Run parallel code review (bugs, security, style, performance) |
+
+### Information
+| Command | Description |
+|---------|-------------|
+| `/version` | Show Sharkbait version |
+| `/help [command]` | Show available commands or help for a specific command |
+
+**Example:** Run a parallel code review:
 ```
-> /cd C:\Users\yourname\code\new-project
-Directory not found. Create it? Type 'y' or 'yes' to create.
-> y
-✓ Created directory and changed to: C:\Users\yourname\code\new-project
+> /review src/auth.ts
+🔀 Starting parallel review: bugs, security, style, performance on src/auth.ts
+[Progress bars for each reviewer mode]
+📋 Parallel Review Complete (12.3s)
 ```
 
 📖 [Full Slash Commands Reference](docs/COMMANDS.md)

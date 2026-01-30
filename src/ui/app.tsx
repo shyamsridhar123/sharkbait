@@ -14,8 +14,10 @@ import { InputPrompt } from "./input-prompt";
 import { InlineLogo } from "./logo";
 import { ToolCallView } from "./tool-call";
 import { ParallelProgressView } from "./parallel-progress";
+import { DiffView } from "./diff-view";
+import { ConfirmDialog, isConfirmation } from "./confirm-dialog";
 import { colors, box, icons } from "./theme";
-import { getWorkingDir } from "../utils/config";
+import { getWorkingDir, loadConfig } from "../utils/config";
 import { executeCommand } from "./commands";
 import type { CommandContext } from "./commands";
 import type { AgentEvent, ParallelAgentProgress } from "../agent/types";
@@ -105,6 +107,10 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
     strategy: "all" | "race" | "quorum";
   } | null>(null);
   const [thinkingMessage, setThinkingMessage] = useState<string | null>(null);
+  const [currentModel, setCurrentModel] = useState(() => {
+    const config = loadConfig();
+    return config.azure.deployment;
+  });
   const abortControllerRef = useRef<AbortController | null>(null);
   const { exit } = useApp();
 
@@ -132,7 +138,23 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
     setBeadsEnabled,
     contextFiles,
     setContextFiles,
-  }), [currentDir, agent, version, exit, beadsEnabled, contextFiles]);
+    emitParallelStart: (agents, strategy) => {
+      setParallelProgress({ agents, strategy });
+    },
+    emitParallelProgress: (agents) => {
+      setParallelProgress(prev => prev ? { ...prev, agents } : null);
+    },
+    emitParallelComplete: (results, consolidated) => {
+      setParallelProgress(null);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: consolidated,
+        timestamp: new Date()
+      }]);
+    },
+    currentModel,
+    setCurrentModel,
+  }), [currentDir, agent, version, exit, beadsEnabled, contextFiles, currentModel]);
 
   useInput((inputChar, key) => {
     // Handle Ctrl+C - cancel operation or exit
@@ -522,6 +544,29 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             />
           )}
           
+          {/* Pending confirmation dialog */}
+          {pendingConfirm && (
+            <ConfirmDialog
+              message={
+                pendingConfirm.type === "mkdir" 
+                  ? `Create directory: ${pendingConfirm.data.path}?`
+                  : pendingConfirm.type === "edit_file"
+                  ? `Apply changes to: ${pendingConfirm.data.filePath}?`
+                  : `Confirm ${pendingConfirm.type}?`
+              }
+              details={pendingConfirm.data.details}
+              showDiff={
+                pendingConfirm.type === "edit_file" && pendingConfirm.data.oldContent && pendingConfirm.data.newContent ? (
+                  <DiffView
+                    filePath={pendingConfirm.data.filePath}
+                    oldContent={pendingConfirm.data.oldContent}
+                    newContent={pendingConfirm.data.newContent}
+                  />
+                ) : undefined
+              }
+            />
+          )}
+          
           {currentOutput && (
             <MessageView role="assistant" content={currentOutput} />
           )}
@@ -549,6 +594,7 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
           mode={isExecuting ? "agent" : "chat"} 
           tokens={tokenCount} 
           cost={sessionCost}
+          model={currentModel}
         />
       </Box>
 

@@ -1,5 +1,5 @@
 /**
- * Spinner Component - Claude Code inspired loading indicator with shimmer
+ * Spinner Component - Simple loading indicator
  */
 
 import React, { useState, useEffect } from "react";
@@ -13,17 +13,6 @@ interface SpinnerProps {
   tokens?: number;
 }
 
-// Shimmer effect colors for the text
-const SHIMMER_COLORS = [
-  colors.textDim,
-  colors.textMuted, 
-  colors.text,
-  colors.primary,
-  colors.text,
-  colors.textMuted,
-  colors.textDim,
-];
-
 export function Spinner({ 
   text = "Thinking...", 
   variant = "braille",
@@ -31,33 +20,21 @@ export function Spinner({
   tokens = 0,
 }: SpinnerProps): React.JSX.Element {
   const [frameIndex, setFrameIndex] = useState(0);
-  const [shimmerIndex, setShimmerIndex] = useState(0);
   
   const frames = variant === "dots" ? DOTS_FRAMES : SPINNER_FRAMES;
 
   useEffect(() => {
     const timer = setInterval(() => {
       setFrameIndex(prev => (prev + 1) % frames.length);
-      setShimmerIndex(prev => (prev + 1) % SHIMMER_COLORS.length);
-    }, 80);
+    }, 100);  // Slower animation to reduce flicker
 
     return () => clearInterval(timer);
   }, [frames.length]);
 
-  // Create shimmer effect on text
-  const shimmerText = text.split("").map((char, i) => {
-    const colorIndex = (shimmerIndex + i) % SHIMMER_COLORS.length;
-    return (
-      <Text key={i} color={SHIMMER_COLORS[colorIndex]}>
-        {char}
-      </Text>
-    );
-  });
-
   return (
     <Box>
       <Text color={colors.primary}>{frames[frameIndex]} </Text>
-      <Text>{shimmerText}</Text>
+      <Text color={colors.text}>{text}</Text>
       {showTokens && tokens > 0 && (
         <Text color={colors.textDim}> ({tokens.toLocaleString()} tokens)</Text>
       )}

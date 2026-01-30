@@ -3,6 +3,7 @@
  */
 
 import type { Agent } from "../../agent/agent";
+import type { ParallelAgentProgress } from "../../agent/types";
 
 /**
  * Context passed to command handlers
@@ -34,6 +35,16 @@ export interface CommandContext {
   contextFiles: string[];
   /** Set context files */
   setContextFiles: (files: string[]) => void;
+  /** Emit parallel start event */
+  emitParallelStart: (agents: ParallelAgentProgress[], strategy: "all" | "race" | "quorum") => void;
+  /** Emit parallel progress event */
+  emitParallelProgress: (agents: ParallelAgentProgress[]) => void;
+  /** Emit parallel complete event */
+  emitParallelComplete: (results: ParallelAgentProgress[], consolidated: string) => void;
+  /** Current model name */
+  currentModel: string;
+  /** Set current model */
+  setCurrentModel: (model: string) => void;
 }
 
 /**
