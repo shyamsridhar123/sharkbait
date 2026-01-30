@@ -23,22 +23,22 @@ Build the terminal UI using ink (React for CLI):
 ### Phase 1: Wire Existing Components (HIGH PRIORITY)
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| SB-011.04 | Wire ToolCallView component to app.tsx | todo | HIGH |
-| SB-011.05 | Wire StatusBar token tracking | todo | HIGH |
-| SB-011.09 | Handle agent system events in UI | todo | HIGH |
-| SB-011.12 | Fix Ctrl+C to cancel instead of exit | todo | HIGH |
+| SB-011.04 | Wire ToolCallView component to app.tsx | ✅ done | HIGH |
+| SB-011.05 | Wire StatusBar token tracking | ✅ done | HIGH |
+| SB-011.09 | Handle agent system events in UI | ✅ done | HIGH |
+| SB-011.12 | Fix Ctrl+C to cancel instead of exit | ✅ done | HIGH |
 
 ### Phase 2: Core UX Features (HIGH PRIORITY)
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| SB-011.07 | Implement diff view for code changes | todo | HIGH |
-| SB-011.08 | Implement confirmation dialogs | todo | HIGH |
+| SB-011.07 | Implement diff view for code changes | ✅ done | HIGH |
+| SB-011.08 | Implement confirmation dialogs | ✅ done | HIGH |
 
 ### Phase 3: Enhanced Features (MEDIUM PRIORITY)
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
 | SB-011.06 | Implement syntax highlighting | todo | MEDIUM |
-| SB-011.10 | Implement parallel execution UI | todo | MEDIUM |
+| SB-011.10 | Implement parallel execution UI | ✅ done | MEDIUM |
 | SB-011.13 | Implement Beads task display | todo | MEDIUM |
 | SB-011.14 | Implement GitHub PR/Issue UI | todo | MEDIUM |
 
@@ -59,17 +59,17 @@ Build the terminal UI using ink (React for CLI):
 
 - [x] Beautiful terminal UI
 - [x] Streaming text rendering
-- [ ] Tool call visualization (component exists, not wired)
+- [x] Tool call visualization (wired to ToolCallView)
 - [x] Spinner/progress components
 - [x] Responsive layout
-- [ ] Ctrl+C handling (exits instead of cancel)
+- [x] Ctrl+C handling (cancel vs exit)
 - [ ] Syntax highlighted code blocks
-- [ ] Diff view for changes
-- [ ] Confirmation dialogs
-- [ ] Token/cost tracking display
-- [ ] Agent routing display
-- [ ] Parallel execution UI
+- [x] Diff view for changes
+- [x] Confirmation dialogs
+- [x] Token/cost tracking display
+- [x] Agent routing display
+- [x] Parallel execution UI
 
-## Current Status: ~40% Complete
+## Current Status: ~80% Complete
 
-Foundation is solid. Missing key UX features from PRD.
+Core UI features implemented. Remaining: syntax highlighting, beads display, GitHub UI.

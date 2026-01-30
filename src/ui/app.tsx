@@ -34,9 +34,9 @@ function formatToolInfo(name: string, args?: Record<string, unknown>): string {
   if (!args) return name;
   
   // Extract the most relevant info based on tool type
-  const path = args.path || args.filePath || args.file;
-  const command = args.command;
-  const taskName = args.name || args.task;
+  const path = args["path"] || args["filePath"] || args["file"];
+  const command = args["command"];
+  const taskName = args["name"] || args["task"];
   
   if (path && typeof path === "string") {
     // Show just the filename for brevity
@@ -259,51 +259,137 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
     setMessages(prev => [...prev, { role: "user", content: userMessage, timestamp: new Date() }]);
     setInput("");
     setIsLoading(true);
+    setIsExecuting(true);
     setCurrentOutput("");
+    setActiveToolCalls([]);
+    
+    // Track tokens from user message
+    const inputTokens = estimateTokens(userMessage);
+    setTokenCount(prev => prev + inputTokens);
+
+    // Create abort controller for cancellation
+    abortControllerRef.current = new AbortController();
 
     try {
       let assistantContent = "";
-      let toolOutput = "";  // Separate tracking for tool execution output
+      const completedToolCalls: TrackedToolCall[] = [];
       
       for await (const event of agent.run(userMessage)) {
+        // Check if cancelled
+        if (abortControllerRef.current?.signal.aborted) {
+          break;
+        }
+        
         switch (event.type) {
           case "text":
             assistantContent += event.content;
-            setCurrentOutput(toolOutput + assistantContent);
+            setCurrentOutput(assistantContent);
+            // Track output tokens
+            const chunkTokens = estimateTokens(event.content);
+            setTokenCount(prev => prev + chunkTokens);
+            // Approximate cost: $0.01/1K input, $0.03/1K output
+            setSessionCost(prev => prev + (chunkTokens * 0.00003));
             break;
-          case "tool_start":
+            
+          case "agent_start":
+            setCurrentAgent(event.agent);
+            setMessages(prev => [...prev, {
+              role: "system",
+              content: `${icons.shark} ${event.agent} agent starting${event.mode ? ` (${event.mode} mode)` : ""}...`,
+              timestamp: new Date()
+            }]);
+            break;
+            
+          case "handoff":
+            setMessages(prev => [...prev, {
+              role: "system",
+              content: `📤 Delegating to ${event.to}...`,
+              timestamp: new Date()
+            }]);
+            break;
+            
+          case "replan":
+            setMessages(prev => [...prev, {
+              role: "system",
+              content: `⚠️ Re-planning: ${event.reason}`,
+              timestamp: new Date()
+            }]);
+            break;
+            
+          case "tool_start": {
             const toolInfo = formatToolInfo(event.name, event.args);
-            toolOutput += `⚡ ${toolInfo}...\n`;
-            setCurrentOutput(toolOutput + assistantContent);
+            const newTool: TrackedToolCall = {
+              id: `${event.name}-${Date.now()}`,
+              name: event.name,
+              displayName: toolInfo,
+              status: "running",
+              startTime: Date.now(),
+            };
+            setActiveToolCalls(prev => [...prev, newTool]);
             break;
-          case "tool_result":
-            // Tool completed - show success indicator (match tool name with optional args)
-            toolOutput = toolOutput.replace(
-              new RegExp(`⚡ ${(event as any).name}( →[^\\n]*)?\\.\\.\\.\n`),
-              `✓ ${(event as any).name}$1\n`
-            );
-            setCurrentOutput(toolOutput + assistantContent);
+          }
+          
+          case "tool_result": {
+            const duration = event.duration;
+            // Update the tool call status
+            setActiveToolCalls(prev => prev.map(tc => 
+              tc.name === event.name && tc.status === "running"
+                ? { 
+                    ...tc, 
+                    status: "success" as const, 
+                    duration,
+                    result: typeof event.result === "string" 
+                      ? event.result.slice(0, 100) 
+                      : JSON.stringify(event.result).slice(0, 100)
+                  }
+                : tc
+            ));
+            // Move to completed
+            setActiveToolCalls(prev => {
+              const completed = prev.find(tc => tc.name === event.name && tc.status === "success");
+              if (completed) {
+                completedToolCalls.push(completed);
+              }
+              return prev.filter(tc => !(tc.name === event.name && tc.status === "success"));
+            });
             break;
-          case "tool_error":
-            // Tool failed - show error indicator
-            toolOutput = toolOutput.replace(
-              new RegExp(`⚡ ${(event as any).name}( →[^\\n]*)?\\.\\.\\.\n`),
-              `✗ ${(event as any).name}$1: ${(event as any).error}\n`
-            );
-            setCurrentOutput(toolOutput + assistantContent);
+          }
+          
+          case "tool_error": {
+            const duration = event.duration;
+            // Update the tool call status
+            setActiveToolCalls(prev => prev.map(tc => 
+              tc.name === event.name && tc.status === "running"
+                ? { 
+                    ...tc, 
+                    status: "error" as const, 
+                    duration,
+                    error: event.error
+                  }
+                : tc
+            ));
             break;
+          }
+          
+          case "token_usage":
+            setTokenCount(event.totalTokens);
+            break;
+            
           case "done":
             // Only add message if there's actual content
-            const finalContent = (toolOutput + assistantContent).trim();
-            if (finalContent) {
+            if (assistantContent.trim()) {
               setMessages(prev => [...prev, { 
                 role: "assistant", 
-                content: finalContent,
-                timestamp: new Date()
+                content: assistantContent.trim(),
+                timestamp: new Date(),
+                toolCalls: completedToolCalls.length > 0 ? [...completedToolCalls] : undefined,
               }]);
             }
             setCurrentOutput("");
+            setActiveToolCalls([]);
+            setCurrentAgent(null);
             break;
+            
           case "error":
             setMessages(prev => [...prev, { 
               role: "system", 
@@ -314,15 +400,21 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      setMessages(prev => [...prev, { 
-        role: "system", 
-        content: `Error: ${message}`,
-        timestamp: new Date()
-      }]);
+      if (abortControllerRef.current?.signal.aborted) {
+        // Already handled by Ctrl+C
+      } else {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setMessages(prev => [...prev, { 
+          role: "system", 
+          content: `Error: ${message}`,
+          timestamp: new Date()
+        }]);
+      }
     }
 
     setIsLoading(false);
+    setIsExecuting(false);
+    abortControllerRef.current = null;
   }
 
   return (
@@ -341,13 +433,45 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
       {!showWelcome && (
         <Box flexDirection="column" marginBottom={0}>
           {messages.map((msg, i) => (
-            <MessageView 
-              key={i} 
-              role={msg.role} 
-              content={msg.content}
-              timestamp={msg.timestamp}
-            />
+            <Box key={i} flexDirection="column">
+              <MessageView 
+                role={msg.role} 
+                content={msg.content}
+                timestamp={msg.timestamp}
+              />
+              {/* Show tool calls for this message if any */}
+              {msg.toolCalls && msg.toolCalls.length > 0 && (
+                <Box flexDirection="column" marginLeft={2}>
+                  {msg.toolCalls.map((tc, j) => (
+                    <ToolCallView
+                      key={j}
+                      name={tc.displayName}
+                      status={tc.status}
+                      result={tc.result}
+                      error={tc.error}
+                      duration={tc.duration}
+                    />
+                  ))}
+                </Box>
+              )}
+            </Box>
           ))}
+          
+          {/* Active tool calls */}
+          {activeToolCalls.length > 0 && (
+            <Box flexDirection="column" marginLeft={2}>
+              {activeToolCalls.map((tc, i) => (
+                <ToolCallView
+                  key={i}
+                  name={tc.displayName}
+                  status={tc.status}
+                  result={tc.result}
+                  error={tc.error}
+                  duration={tc.duration}
+                />
+              ))}
+            </Box>
+          )}
           
           {currentOutput && (
             <MessageView role="assistant" content={currentOutput} />
@@ -358,8 +482,12 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
       {/* Loading or Input */}
       <Box marginTop={0}>
         {isLoading ? (
-          <Box marginLeft={1}>
-            <Spinner text="Thinking..." showTokens={true} tokens={tokenCount} />
+          <Box flexDirection="column" marginLeft={1}>
+            <Spinner 
+              text={currentAgent ? `${currentAgent} thinking...` : "Thinking..."} 
+              showTokens={true} 
+              tokens={tokenCount} 
+            />
           </Box>
         ) : (
           <InputPrompt value={input} />
@@ -368,14 +496,24 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
 
       {/* Status Bar */}
       <Box marginTop={0}>
-        <StatusBar mode="chat" tokens={tokenCount} />
+        <StatusBar 
+          mode={isExecuting ? "agent" : "chat"} 
+          tokens={tokenCount} 
+          cost={sessionCost}
+        />
       </Box>
 
       {/* Help hint */}
       <Box marginTop={0} justifyContent="center">
         <Text color={colors.textDim}>
-          Press <Text color={colors.primary}>ESC</Text> to exit • 
-          <Text color={colors.primary}> Enter</Text> to send
+          {isExecuting ? (
+            <>Press <Text color={colors.warning}>Ctrl+C</Text> to cancel</>
+          ) : (
+            <>
+              Press <Text color={colors.primary}>Ctrl+C</Text> to exit • 
+              <Text color={colors.primary}> Enter</Text> to send
+            </>
+          )}
         </Text>
       </Box>
     </Box>

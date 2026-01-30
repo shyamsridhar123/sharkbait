@@ -8,7 +8,12 @@ export { MessageView } from "./message";
 export { Spinner } from "./spinner";
 export { ToolCallView } from "./tool-call";
 
-// New Claude Code-inspired components
+// New enhanced components
+export { DiffView } from "./diff-view";
+export { ConfirmDialog, isConfirmation } from "./confirm-dialog";
+export { ParallelProgressView } from "./parallel-progress";
+
+// Claude Code-inspired components
 export { Logo, InlineLogo } from "./logo";
 export { WelcomeScreen } from "./welcome";
 export { StatusBar } from "./status-bar";

@@ -33,22 +33,22 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffLine[] {
   while (i < oldLines.length || j < newLines.length) {
     if (i >= oldLines.length) {
       // Remaining new lines are additions
-      result.push({ type: "add", content: newLines[j], lineNumber: j + 1 });
+      result.push({ type: "add", content: newLines[j] ?? "", lineNumber: j + 1 });
       j++;
     } else if (j >= newLines.length) {
       // Remaining old lines are deletions
-      result.push({ type: "remove", content: oldLines[i], lineNumber: i + 1 });
+      result.push({ type: "remove", content: oldLines[i] ?? "", lineNumber: i + 1 });
       i++;
     } else if (oldLines[i] === newLines[j]) {
       // Lines match - context
-      result.push({ type: "context", content: oldLines[i], lineNumber: i + 1 });
+      result.push({ type: "context", content: oldLines[i] ?? "", lineNumber: i + 1 });
       i++;
       j++;
     } else {
       // Lines differ - find the next matching point
       // Simple approach: mark old as removed, new as added
-      result.push({ type: "remove", content: oldLines[i], lineNumber: i + 1 });
-      result.push({ type: "add", content: newLines[j], lineNumber: j + 1 });
+      result.push({ type: "remove", content: oldLines[i] ?? "", lineNumber: i + 1 });
+      result.push({ type: "add", content: newLines[j] ?? "", lineNumber: j + 1 });
       i++;
       j++;
     }
@@ -95,12 +95,13 @@ function collapseContext(lines: DiffLine[], contextLines: number): DiffLine[] {
   
   let lastShownIdx = -2;
   for (let idx = 0; idx < lines.length; idx++) {
-    if (showIndices.has(idx)) {
+    const line = lines[idx];
+    if (showIndices.has(idx) && line) {
       if (lastShownIdx !== -2 && idx - lastShownIdx > 1) {
         // Gap - add ellipsis
         result.push({ type: "context", content: "..." });
       }
-      result.push(lines[idx]);
+      result.push(line);
       lastShownIdx = idx;
     }
   }
