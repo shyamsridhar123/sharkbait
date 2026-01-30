@@ -35,6 +35,23 @@ export { ExplorerAgent } from "./explorer";
 export { AgentFactory } from "./factory";
 export { ParallelExecutor, parallelReview } from "./parallel-executor";
 
+// Workflows
+export {
+  BaseWorkflow,
+  FeatureDevWorkflow,
+  PRWorkflow,
+  BugFixWorkflow,
+  RefactorWorkflow,
+  type WorkflowPhase,
+  type WorkflowOptions,
+  type WorkflowResult,
+  type PhaseStatus,
+  type PhaseResult,
+  type PRWorkflowOptions,
+  type BugFixOptions,
+  type RefactorOptions,
+} from "./workflows";
+
 // Prompts
 export { 
   getAgentPrompt, 

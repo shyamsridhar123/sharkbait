@@ -8,4 +8,5 @@ export { shellTools } from "./shell";
 export { beadsTools } from "./beads";
 export { gitTools } from "./git";
 export { githubTools } from "./github";
+export { fetchTools } from "./fetch";
 export { TOOL_DEFINITIONS } from "./definitions";

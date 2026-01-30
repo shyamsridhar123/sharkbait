@@ -20,6 +20,7 @@ export type AgentEvent =
   | { type: "tool_result"; name: string; result: unknown; duration?: number }
   | { type: "tool_error"; name: string; error: string; duration?: number }
   | { type: "agent_start"; agent: string; mode?: string }
+  | { type: "agent_switch"; agent: string; mode?: string }
   | { type: "handoff"; from: string; to: string; reason?: string }
   | { type: "replan"; reason: string }
   | { type: "thinking"; agent: string; message?: string }
@@ -27,5 +28,7 @@ export type AgentEvent =
   | { type: "parallel_start"; agents: ParallelAgentProgress[]; strategy: "all" | "race" | "quorum" }
   | { type: "parallel_progress"; agents: ParallelAgentProgress[] }
   | { type: "parallel_complete"; results: ParallelAgentProgress[]; consolidated: string }
+  | { type: "workflow_start"; workflow: string }
+  | { type: "workflow_complete"; workflow: string; success: boolean }
   | { type: "error"; message: string }
   | { type: "done"; stats?: { duration?: number; toolsUsed?: string[] } };

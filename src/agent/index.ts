@@ -7,3 +7,4 @@ export { AgentLoop } from "./loop";
 export { ContextManager } from "./context";
 export { ProgressTracker, type TaskLedger, type ProgressLedger } from "./progress";
 export { startChat } from "./start-chat";
+export type { AgentEvent, ParallelAgentProgress } from "./types";

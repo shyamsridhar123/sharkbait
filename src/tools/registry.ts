@@ -8,6 +8,7 @@ import { shellTools } from "./shell";
 import { beadsTools } from "./beads";
 import { gitTools } from "./git";
 import { githubTools } from "./github";
+import { fetchTools } from "./fetch";
 import { ToolError } from "../utils/errors";
 import { log } from "../utils/logger";
 
@@ -31,6 +32,7 @@ export class ToolRegistry {
     this.registerAll(shellTools);
     this.registerAll(gitTools);
     this.registerAll(githubTools);
+    this.registerAll(fetchTools);
     
     // Optionally register beads tools
     if (options.enableBeads !== false) {
