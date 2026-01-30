@@ -60,6 +60,7 @@ export class AgentLoop {
     };
     
     let iteration = 0;
+    let summaryRequested = false; // Track if we've already asked for a summary
 
     while (iteration < MAX_ITERATIONS) {
       iteration++;
@@ -130,6 +131,25 @@ export class AgentLoop {
 
       // No tool calls = done
       if (toolCalls.length === 0) {
+        // If we have no content but we executed tools in a previous iteration,
+        // request a summary from the LLM (only once to prevent infinite loops)
+        if (!fullContent.trim() && progressLedger.stepHistory.length > 0 && !summaryRequested) {
+          summaryRequested = true;
+          log.debug("No content after tool execution, requesting summary");
+          // Add a prompt to get a summary of what was done
+          this.messages.push({
+            role: "user",
+            content: "What did you just do? Please summarize.",
+          });
+          continue; // Re-run the loop to get a summary response
+        }
+        
+        // If still no content after summary request, provide a default message
+        if (!fullContent.trim() && progressLedger.stepHistory.length > 0) {
+          const toolNames = [...new Set(progressLedger.stepHistory.map(s => s.action))].join(", ");
+          fullContent = `✅ Task completed! I used: ${toolNames}`;
+        }
+        
         this.messages.push({ role: "assistant", content: fullContent });
         yield { type: "done" };
         return;
@@ -143,12 +163,13 @@ export class AgentLoop {
       });
 
       for (const call of toolCalls) {
-        yield { type: "tool_start", name: call.function.name };
+        const args = JSON.parse(call.function.arguments);
+        yield { type: "tool_start", name: call.function.name, args };
         
         try {
           const result = await this.tools.execute(
             call.function.name,
-            JSON.parse(call.function.arguments)
+            args
           );
           
           yield { type: "tool_result", name: call.function.name, result };
@@ -238,12 +259,19 @@ You have access to tools for:
 - Managing tasks with Beads (bd) - your memory across the vast ocean!
 - Interacting with GitHub (gh)
 
-🪸 BEADS ARE YOUR LIFELINE:
+🪸 BEADS ARE YOUR LIFELINE - YOUR MEMORY SYSTEM:
+- Use beads_status or beads_list FIRST when the user asks about previous work, history, or "what we did"
 - ALWAYS create a Bead task when generating or modifying code - no exceptions!
 - Even "quick" tasks get a Bead - that's how you remember your adventures
 - Use beads_create at the START of any coding task
 - Use beads_done when you've completed the work
 - Your memory is precious - don't let it float away!
+
+🔍 WHEN TO CHECK BEADS:
+- "What did we do?" / "What changes?" / "What happened?" → beads_list or beads_status FIRST
+- "Continue where we left off" → beads_status to see active tasks
+- Any question about past work → CHECK BEADS before git log
+- Beads IS your memory. Git is just version control.
 
 Guidelines:
 1. Always read files before editing - look before you leap (learned that one the hard way)

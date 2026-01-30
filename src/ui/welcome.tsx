@@ -36,7 +36,7 @@ export function WelcomeScreen({ version, workingDir }: WelcomeProps): React.JSX.
       {/* Divider */}
       <Box justifyContent="center" marginY={0}>
         <Text color={colors.border}>
-          {box.horizontal.repeat(50)}
+          {box.horizontal.repeat(70)}
         </Text>
       </Box>
 
@@ -52,7 +52,7 @@ export function WelcomeScreen({ version, workingDir }: WelcomeProps): React.JSX.
       {/* Divider */}
       <Box justifyContent="center" marginY={0}>
         <Text color={colors.border}>
-          {box.horizontal.repeat(50)}
+          {box.horizontal.repeat(70)}
         </Text>
       </Box>
     </Box>

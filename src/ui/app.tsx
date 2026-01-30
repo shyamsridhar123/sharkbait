@@ -16,6 +16,36 @@ import { getWorkingDir } from "../utils/config";
 import { executeCommand } from "./commands";
 import type { CommandContext } from "./commands";
 import type { AgentEvent } from "../agent/types";
+import { basename } from "path";
+
+/**
+ * Format tool info with relevant details (like file paths)
+ */
+function formatToolInfo(name: string, args?: Record<string, unknown>): string {
+  if (!args) return name;
+  
+  // Extract the most relevant info based on tool type
+  const path = args.path || args.filePath || args.file;
+  const command = args.command;
+  const taskName = args.name || args.task;
+  
+  if (path && typeof path === "string") {
+    // Show just the filename for brevity
+    return `${name} → ${basename(path)}`;
+  }
+  
+  if (command && typeof command === "string") {
+    // Truncate long commands
+    const shortCmd = command.length > 40 ? command.slice(0, 37) + "..." : command;
+    return `${name} → ${shortCmd}`;
+  }
+  
+  if (taskName && typeof taskName === "string") {
+    return `${name} → "${taskName}"`;
+  }
+  
+  return name;
+}
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -192,22 +222,23 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             setCurrentOutput(toolOutput + assistantContent);
             break;
           case "tool_start":
-            toolOutput += `⚡ ${event.name}...\n`;
+            const toolInfo = formatToolInfo(event.name, event.args);
+            toolOutput += `⚡ ${toolInfo}...\n`;
             setCurrentOutput(toolOutput + assistantContent);
             break;
           case "tool_result":
-            // Tool completed - show success indicator
+            // Tool completed - show success indicator (match tool name with optional args)
             toolOutput = toolOutput.replace(
-              new RegExp(`⚡ ${(event as any).name}\\.\\.\\.\n$`),
-              `✓ ${(event as any).name}\n`
+              new RegExp(`⚡ ${(event as any).name}( →[^\\n]*)?\\.\\.\\.\n`),
+              `✓ ${(event as any).name}$1\n`
             );
             setCurrentOutput(toolOutput + assistantContent);
             break;
           case "tool_error":
             // Tool failed - show error indicator
             toolOutput = toolOutput.replace(
-              new RegExp(`⚡ ${(event as any).name}\\.\\.\\.\n$`),
-              `✗ ${(event as any).name}: ${(event as any).error}\n`
+              new RegExp(`⚡ ${(event as any).name}( →[^\\n]*)?\\.\\.\\.\n`),
+              `✗ ${(event as any).name}$1: ${(event as any).error}\n`
             );
             setCurrentOutput(toolOutput + assistantContent);
             break;
