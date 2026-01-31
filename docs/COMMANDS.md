@@ -13,9 +13,14 @@ During an interactive chat session, you can use slash commands to control sharkb
 | `/help [command]` | Show available commands (aliases: `/h`, `/?`) |
 | `/version` | Show Sharkbait version (alias: `/v`) |
 | `/beads [on\|off]` | Toggle Beads task tracking |
+| `/model [name]` | Show or switch the LLM model (alias: `/m`) |
+| `/tasks` | Show Beads task status (alias: `/t`) |
 | `/context [add\|remove\|list] [files...]` | Manage context files (alias: `/ctx`) |
+| `/setup` | Launch interactive setup wizard |
 | `/init` | Initialize Sharkbait in current directory |
+| `/ask <question>` | Ask a one-off question (no history) |
 | `/run <task>` | Execute a task autonomously (alias: `/exec`) |
+| `/review <file>` | Run parallel code review |
 
 ---
 
@@ -104,6 +109,45 @@ Enable or disable Beads task tracking. Without arguments, shows the current stat
 
 ---
 
+#### `/model [name]` - Switch Model
+
+Show the current LLM model or switch to a different one.
+
+**Aliases:** `/m`
+
+**Available Models:**
+- `gpt-5.1-codex-max`
+- `gpt-codex-5.2`
+- `gpt-4-turbo`
+- `gpt-4o`
+- `gpt-4o-mini`
+
+**Usage:**
+```
+/model              # Show current model and available options
+/model gpt-4o       # Switch to gpt-4o
+/model gpt-codex-5.2  # Switch to codex model
+```
+
+**Note:** Model changes take effect on the next message (requires agent restart).
+
+---
+
+#### `/tasks` - Show Task Status
+
+Display the current Beads task status. Requires Beads to be enabled.
+
+**Aliases:** `/t`
+
+**Usage:**
+```
+/tasks         # Show all tasks
+/tasks list    # List tasks
+/tasks active  # Show active tasks only
+```
+
+---
+
 #### `/context` - Manage Context Files
 
 Add, remove, or list files in the current context. Context files are included in every AI request.
@@ -123,6 +167,24 @@ Add, remove, or list files in the current context. Context files are included in
 
 ### Action Commands
 
+#### `/setup` - Setup Wizard
+
+Launch the interactive setup wizard to check and configure Sharkbait.
+
+**Usage:**
+```
+/setup
+```
+
+**Checks performed:**
+- Azure OpenAI configuration (endpoint and API key)
+- Working directory
+- Current model
+- Beads status
+- Git repository detection
+
+---
+
 #### `/init` - Initialize Project
 
 Initialize Sharkbait configuration in the current directory. Creates `.sharkbait.json` and `.env.example`.
@@ -130,6 +192,19 @@ Initialize Sharkbait configuration in the current directory. Creates `.sharkbait
 **Usage:**
 ```
 /init
+```
+
+---
+
+#### `/ask <question>` - Ask Question
+
+Ask a one-off question without maintaining conversation history. Useful for quick queries.
+
+**Usage:**
+```
+/ask what does the login function do?
+/ask explain this error message
+/ask how do I use the fetch API?
 ```
 
 ---
@@ -145,6 +220,39 @@ Execute a task autonomously. The AI will break down the task and execute it with
 /run create a new React component for user profile
 /run refactor the authentication module
 /run add unit tests for the utils folder
+```
+
+---
+
+#### `/review <file>` - Parallel Code Review
+
+Run a parallel code review on a file using multiple reviewer modes simultaneously.
+
+**Usage:**
+```
+/review src/app.ts                        # Full review (all modes)
+/review src/app.ts --mode bugs            # Single mode
+/review src/app.ts --mode security,style  # Multiple modes
+```
+
+**Available Modes:**
+- `bugs` - Find potential bugs and logic errors
+- `security` - Identify security vulnerabilities
+- `style` - Check code style and best practices
+- `performance` - Find performance issues
+- `all` - Run all modes (default)
+
+**Example output:**
+```
+> /review src/auth.ts
+🔀 Starting parallel review: bugs, security, style, performance
+[Progress bars for each reviewer mode]
+📋 Parallel Review Complete (12.3s)
+
+Strategy: all | Modes: bugs, security, style, performance
+
+---
+[Consolidated review findings]
 ```
 
 ---
