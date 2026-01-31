@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | ID | SB-007 |
-| Status | todo |
+| Status | Completed |
 | Priority | medium |
 | Created | 2025-01-13 |
 | Updated | 2026-01-28 |

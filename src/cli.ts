@@ -11,6 +11,7 @@ import { initProject } from "./commands/init";
 import { askQuestion } from "./commands/ask";
 import { runTask } from "./commands/run";
 import { runSetup } from "./commands/setup";
+import { runReview } from "./commands/review";
 
 // Version hardcoded for compiled binary compatibility
 const VERSION = "1.0.0";
@@ -58,5 +59,12 @@ program
   .command("setup")
   .description("Interactive setup wizard for configuring Sharkbait")
   .action(runSetup);
+
+program
+  .command("review <file>")
+  .description("Run parallel code review on a file")
+  .option("-m, --mode <modes>", "Review modes: bugs,security,style,performance,all", "all")
+  .option("--parallel", "Run modes in parallel (default)", true)
+  .action((file, options) => runReview(file, options));
 
 program.parse();

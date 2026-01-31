@@ -11,13 +11,15 @@ interface StatusBarProps {
   tokens?: number;
   cost?: number;
   mode?: "chat" | "agent" | "plan";
+  activeTask?: { id: string; title?: string } | null;
 }
 
 export function StatusBar({ 
   model, 
   tokens = 0, 
   cost = 0,
-  mode = "chat" 
+  mode = "chat",
+  activeTask = null,
 }: StatusBarProps): React.JSX.Element {
   // Get model from config if not provided
   const displayModel = model || process.env["AZURE_OPENAI_CODEX_DEPLOYMENT"] || process.env["AZURE_OPENAI_DEPLOYMENT"] || "unknown";
@@ -45,6 +47,16 @@ export function StatusBar({
         <Text color={modeColors[mode]}>
           {icons.shark} {modeLabels[mode]}
         </Text>
+        
+        {/* Active task indicator */}
+        {activeTask && (
+          <Text color={colors.textMuted}>
+            {" "}| <Text color={colors.primary}>◐ {activeTask.id}</Text>
+            {activeTask.title && (
+              <Text color={colors.textDim}> {activeTask.title.slice(0, 20)}</Text>
+            )}
+          </Text>
+        )}
       </Box>
 
       {/* Center - Model */}

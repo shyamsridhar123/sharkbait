@@ -21,8 +21,10 @@
   },
   "dependencies": {
     "chalk": "^5.3.0",
+    "cli-highlight": "^2.1.11",
     "commander": "^12.1.0",
     "ink": "^4.4.1",
+    "ink-link": "^5.0.0",
     "ink-text-input": "^6.0.0",
     "openai": "^4.77.0",
     "react": "^18.2.0",

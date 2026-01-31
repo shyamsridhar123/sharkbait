@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | ID | SB-012 |
-| Status | todo |
+| Status | Completed |
 | Priority | medium |
 | Created | 2025-01-13 |
 

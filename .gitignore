@@ -72,3 +72,6 @@ public/game/
 
 # Compiled binary
 sharkbait.exe
+
+# Generated test artifacts
+todo-app/

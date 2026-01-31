@@ -1,18 +1,26 @@
 /**
  * Message View Component - Claude Code inspired message rendering
+ * Now with syntax highlighting for code blocks
  */
 
 import React from "react";
 import { Box, Text } from "ink";
 import { colors, icons } from "./theme";
+import { HighlightedContent, parseCodeBlocks } from "./syntax-highlight";
 
 interface MessageViewProps {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp?: Date;
+  enableHighlighting?: boolean;
 }
 
-export function MessageView({ role, content, timestamp }: MessageViewProps): React.JSX.Element {
+export function MessageView({ 
+  role, 
+  content, 
+  timestamp,
+  enableHighlighting = true,
+}: MessageViewProps): React.JSX.Element {
   const roleConfig = {
     user: {
       color: colors.user,
@@ -37,6 +45,9 @@ export function MessageView({ role, content, timestamp }: MessageViewProps): Rea
     minute: "2-digit" 
   }) : null;
 
+  // Check if content has code blocks
+  const hasCodeBlocks = content.includes("```");
+
   return (
     <Box flexDirection="column" marginBottom={1}>
       {/* Header row */}
@@ -48,11 +59,15 @@ export function MessageView({ role, content, timestamp }: MessageViewProps): Rea
         )}
       </Box>
       
-      {/* Message content */}
+      {/* Message content - use highlighting for assistant messages with code */}
       <Box marginLeft={3} marginTop={0}>
-        <Text wrap="wrap" color={role === "system" ? colors.textMuted : colors.text}>
-          {content}
-        </Text>
+        {enableHighlighting && hasCodeBlocks && role === "assistant" ? (
+          <HighlightedContent content={content} />
+        ) : (
+          <Text wrap="wrap" color={role === "system" ? colors.textMuted : colors.text}>
+            {content}
+          </Text>
+        )}
       </Box>
     </Box>
   );
