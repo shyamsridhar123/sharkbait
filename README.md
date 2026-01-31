@@ -177,15 +177,30 @@ During an interactive chat session, use slash commands for quick actions:
 
 ## Available Tools
 
-Sharkbait has access to 24+ tools across different categories:
+Sharkbait has access to 33 tools across different categories:
 
 | Category | Tools |
 |----------|-------|
 | **File Operations** | `read_file`, `write_file`, `edit_file`, `list_directory`, `search_files`, `grep_search`, `create_directory` |
-| **Shell** | `run_command` |
-| **Beads** | `beads_ready`, `beads_create`, `beads_show`, `beads_done`, `beads_add_dependency`, `beads_list` |
+| **Shell** | `run_command`, `open_file` |
+| **Beads** | `beads_status`, `beads_init`, `beads_ready`, `beads_create`, `beads_show`, `beads_done`, `beads_add_dependency`, `beads_list` |
 | **Git** | `git_status`, `git_diff`, `git_commit`, `git_push`, `git_branch`, `git_log` |
 | **GitHub** | `github_create_pr`, `github_list_prs`, `github_merge_pr`, `github_create_issue`, `github_workflow_status`, `github_pr_view`, `github_issue_list` |
+| **Web/Fetch** | `fetch_webpage`, `fetch_json`, `web_search` |
+
+## Specialized Agents
+
+Sharkbait uses a multi-agent architecture with specialized agents for different tasks:
+
+| Agent | Purpose |
+|-------|---------|
+| **Orchestrator** | Routes requests to the appropriate specialized agent based on intent |
+| **Coder** | Writes, modifies, and refactors code with tool access |
+| **Reviewer** | Reviews code for bugs, security, style, and performance issues |
+| **Explorer** | Maps codebase architecture and finds relevant files |
+| **Planner** | Breaks down complex tasks into actionable steps |
+| **Debugger** | Traces issues and diagnoses bugs |
+| **Parallel Executor** | Runs multiple agent tasks concurrently (e.g., parallel code reviews) |
 
 ## Architecture
 

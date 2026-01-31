@@ -7,6 +7,7 @@ import { shellTools } from "./shell";
 import { beadsTools } from "./beads";
 import { gitTools } from "./git";
 import { githubTools } from "./github";
+import { fetchTools } from "./fetch";
 
 const allTools = [
   ...fileTools,
@@ -14,6 +15,7 @@ const allTools = [
   ...beadsTools,
   ...gitTools,
   ...githubTools,
+  ...fetchTools,
 ];
 
 export const TOOL_DEFINITIONS = allTools.map(tool => ({
@@ -32,5 +34,6 @@ export const TOOL_COUNTS = {
   beads: beadsTools.length,
   git: gitTools.length,
   github: githubTools.length,
+  fetch: fetchTools.length,
   total: allTools.length,
 };
