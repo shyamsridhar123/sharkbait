@@ -30,7 +30,7 @@
 
 > *"Just keep coding, just keep coding..."* — Dory, probably
 
-Sharkbait is a CLI-based AI coding assistant built with Bun and TypeScript. Like Nemo escaping the dentist's fish tank, it helps you break free from tedious coding tasks.
+Sharkbait is a CLI-based AI coding assistant built with Bun and TypeScript. It uses the **OpenAI Responses API** (not Chat Completions) for enhanced tool calling and streaming. Like Nemo escaping the dentist's fish tank, it helps you break free from tedious coding tasks.
 
 ### 🧠 The Memory Problem
 
@@ -53,6 +53,7 @@ Most AI coding assistants have the memory of... well, Dory. They forget context 
 ## Features
 
 - 🐠 **Fast** — Built on Bun. Swims through code faster than Marlin crossing the EAC
+- 🤖 **Responses API** — Uses OpenAI's Responses API for better streaming and tool calling
 - 🔧 **Tool-equipped** — File ops, shell commands, Git, GitHub. Everything but the Ring of Fire
 - 🧠 **Persistent Memory** — Beads give your AI long-term memory that survives sessions (unlike Dory)
 - 📋 **Git-backed Context** — Your AI's memory lives in your repo. Clone it, branch it, merge it
