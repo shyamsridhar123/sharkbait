@@ -47,7 +47,7 @@ export function loadConfig(): Config {
       endpoint: "",
       apiKey: "",
       deployment: "gpt-codex-5.2",
-      apiVersion: "2024-10-21",
+      apiVersion: "2025-03-01-preview",
     },
     features: {
       beads: true,

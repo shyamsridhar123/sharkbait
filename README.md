@@ -241,7 +241,7 @@ bun run build:all
 | `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL | (required) |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | (required) |
 | `AZURE_OPENAI_DEPLOYMENT` | Model deployment name | `gpt-codex-5.2` |
-| `AZURE_OPENAI_API_VERSION` | API version | `2024-10-21` |
+| `AZURE_OPENAI_API_VERSION` | API version (Responses API requires 2025-03-01-preview+) | `2025-03-01-preview` |
 | `SHARKBAIT_LOG_LEVEL` | Log level (debug/info/warn/error) | `info` |
 | `SHARKBAIT_LOG_FILE` | Enable file logging to ~/.sharkbait/logs | `false` |
 | `SHARKBAIT_LOG_JSON` | Use JSON format for console output | `false` |
