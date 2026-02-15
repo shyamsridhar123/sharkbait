@@ -9,6 +9,7 @@ import { beadsTools } from "./beads";
 import { gitTools } from "./git";
 import { githubTools } from "./github";
 import { fetchTools } from "./fetch";
+import { codebaseTools } from "./codebase";
 import { ToolError } from "../utils/errors";
 import { log } from "../utils/logger";
 
@@ -33,6 +34,7 @@ export class ToolRegistry {
     this.registerAll(gitTools);
     this.registerAll(githubTools);
     this.registerAll(fetchTools);
+    this.registerAll(codebaseTools);
     
     // Optionally register beads tools
     if (options.enableBeads !== false) {
