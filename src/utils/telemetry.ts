@@ -429,3 +429,17 @@ export function trackError(errorType: string): void {
 
 // Export class for testing
 export { Telemetry };
+
+// Type alias for consistency with CLI
+export type TelemetryClient = Telemetry;
+
+/**
+ * Initialize telemetry system
+ */
+export function initTelemetry(): TelemetryClient | null {
+  // Only initialize if enabled
+  if (process.env["SHARKBAIT_TELEMETRY"] === "true") {
+    return telemetry;
+  }
+  return null;
+}

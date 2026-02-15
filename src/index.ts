@@ -6,7 +6,7 @@
  */
 
 import { loadConfig, type Config } from "./utils/config.js";
-import { logger } from "./utils/logger.js";
+import { log as logger } from "./utils/logger.js";
 import { AzureOpenAIClient } from "./llm/azure-openai.js";
 import { ToolRegistry } from "./tools/registry.js";
 import { HookRegistry } from "./hooks/registry.js";
@@ -55,9 +55,7 @@ export async function initialize(options: Partial<Config> = {}): Promise<AppInst
     await hooks.loadBuiltins();
 
     // Initialize telemetry if enabled
-    const telemetry = config.telemetry?.enabled
-      ? await initTelemetry(config)
-      : null;
+    const telemetry = initTelemetry();
 
     logger.info("Sharkbait CLI initialized successfully");
 
