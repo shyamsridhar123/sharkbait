@@ -304,13 +304,13 @@ export const codebaseTools: Tool[] = [
         };
       }
       
-      const architectureMap: Record<string, string[]> = {
-        entryPoints: [],
-        configFiles: [],
-        testDirectories: [],
-        ciConfigs: [],
-        documentation: [],
-        buildOutputs: [],
+      const architectureMap = {
+        entryPoints: [] as string[],
+        configFiles: [] as string[],
+        testDirectories: [] as string[],
+        ciConfigs: [] as string[],
+        documentation: [] as string[],
+        buildOutputs: [] as string[],
       };
       
       // Entry points to look for
@@ -324,7 +324,7 @@ export const codebaseTools: Tool[] = [
         const fullPath = join(projectDir, entry);
         try {
           await stat(fullPath);
-          architectureMap["entryPoints"].push(entry);
+          architectureMap.entryPoints.push(entry);
         } catch {
           // File doesn't exist
         }
@@ -344,7 +344,7 @@ export const codebaseTools: Tool[] = [
         const fullPath = join(projectDir, config);
         try {
           await stat(fullPath);
-          architectureMap["configFiles"].push(config);
+          architectureMap.configFiles.push(config);
         } catch {
           // File doesn't exist
         }
@@ -358,7 +358,7 @@ export const codebaseTools: Tool[] = [
         try {
           const stats = await stat(fullPath);
           if (stats.isDirectory()) {
-            architectureMap["testDirectories"].push(testDir);
+            architectureMap.testDirectories.push(testDir);
           }
         } catch {
           // Directory doesn't exist
@@ -379,7 +379,7 @@ export const codebaseTools: Tool[] = [
         const fullPath = join(projectDir, ci);
         try {
           await stat(fullPath);
-          architectureMap["ciConfigs"].push(ci);
+          architectureMap.ciConfigs.push(ci);
         } catch {
           // File doesn't exist
         }
@@ -392,7 +392,7 @@ export const codebaseTools: Tool[] = [
         const fullPath = join(projectDir, doc);
         try {
           await stat(fullPath);
-          architectureMap["documentation"].push(doc);
+          architectureMap.documentation.push(doc);
         } catch {
           // File doesn't exist
         }
@@ -406,7 +406,7 @@ export const codebaseTools: Tool[] = [
         try {
           const stats = await stat(fullPath);
           if (stats.isDirectory()) {
-            architectureMap["buildOutputs"].push(buildDir);
+            architectureMap.buildOutputs.push(buildDir);
           }
         } catch {
           // Directory doesn't exist
@@ -415,23 +415,23 @@ export const codebaseTools: Tool[] = [
       
       return {
         projectDirectory: projectDir,
-        entryPoints: architectureMap["entryPoints"].length > 0 
-          ? architectureMap["entryPoints"] 
+        entryPoints: architectureMap.entryPoints.length > 0 
+          ? architectureMap.entryPoints 
           : ["(none found)"],
-        configFiles: architectureMap["configFiles"].length > 0 
-          ? architectureMap["configFiles"] 
+        configFiles: architectureMap.configFiles.length > 0 
+          ? architectureMap.configFiles 
           : ["(none found)"],
-        testDirectories: architectureMap["testDirectories"].length > 0 
-          ? architectureMap["testDirectories"] 
+        testDirectories: architectureMap.testDirectories.length > 0 
+          ? architectureMap.testDirectories 
           : ["(none found)"],
-        ciConfigs: architectureMap["ciConfigs"].length > 0 
-          ? architectureMap["ciConfigs"] 
+        ciConfigs: architectureMap.ciConfigs.length > 0 
+          ? architectureMap.ciConfigs 
           : ["(none found)"],
-        documentation: architectureMap["documentation"].length > 0 
-          ? architectureMap["documentation"] 
+        documentation: architectureMap.documentation.length > 0 
+          ? architectureMap.documentation 
           : ["(none found)"],
-        buildOutputs: architectureMap["buildOutputs"].length > 0 
-          ? architectureMap["buildOutputs"] 
+        buildOutputs: architectureMap.buildOutputs.length > 0 
+          ? architectureMap.buildOutputs 
           : ["(none found)"],
       };
     },
