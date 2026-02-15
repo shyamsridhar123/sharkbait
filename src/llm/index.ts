@@ -5,3 +5,4 @@
 export { AzureOpenAIClient, type LLMConfig } from "./azure-openai";
 export { StreamHandler } from "./streaming";
 export type { Message, ToolCall, ChatChunk, ToolDefinition } from "./types";
+export { withRetry, type RetryOptions, retryUtils } from "./retry";

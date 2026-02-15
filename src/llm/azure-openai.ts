@@ -6,6 +6,7 @@ import { AzureOpenAI } from "openai";
 import type { ChatChunk, ToolDefinition, Message } from "./types";
 import { log } from "../utils/logger";
 import { LLMError } from "../utils/errors";
+import { withRetry } from "./retry";
 
 export interface LLMConfig {
   endpoint: string;
@@ -17,8 +18,6 @@ export interface LLMConfig {
 export class AzureOpenAIClient {
   private client: AzureOpenAI;
   private deployment: string;
-  private maxRetries: number = 3;
-  private baseDelay: number = 1000;
 
   constructor(config: LLMConfig) {
     if (!config.endpoint || !config.apiKey) {
@@ -45,10 +44,10 @@ export class AzureOpenAIClient {
     // Convert messages to Responses API input format
     const input = this.convertMessagesToInput(nonSystemMessages);
 
-    let lastError: Error | null = null;
-    
-    for (let attempt = 0; attempt < this.maxRetries; attempt++) {
-      try {
+    // Use withRetry to create the stream with automatic retry logic
+    // Note: We wrap the stream creation, not the iteration
+    const stream = await withRetry(
+      async () => {
         // Build tools config for Responses API
         const toolsConfig = tools ? tools.map(t => ({
           type: "function" as const,
@@ -58,133 +57,130 @@ export class AzureOpenAIClient {
         })) : undefined;
         
         // Use the Responses API with streaming
-        const stream = await this.client.responses.create({
+        return await this.client.responses.create({
           model: this.deployment,
           input: input,
           instructions: instructions,
           tools: toolsConfig,
           stream: true,
         });
+      },
+      {
+        maxRetries: 3,
+        baseDelay: 1000,
+        maxDelay: 60000,
+        onRetry: (error, attempt, delay) => {
+          const message = error instanceof Error ? error.message : String(error);
+          log.warn(`LLM request failed: ${message}. Retry attempt ${attempt}/3 after ${delay}ms`);
+        },
+      }
+    );
 
-        let currentToolCallId = "";
-        let currentToolCallName = "";
-        let currentToolCallArgs = "";
-        let streamedTextLength = 0; // Track how much text we've already streamed
+    let currentToolCallId = "";
+    let currentToolCallName = "";
+    let currentToolCallArgs = "";
+    let streamedTextLength = 0; // Track how much text we've already streamed
 
-        for await (const event of stream) {
-          // Debug logging for all events
-          log.debug(`LLM event: ${event.type}`, event);
-          
-          // Handle different event types from Responses API
-          switch (event.type) {
-            case "response.output_text.delta":
-            case "response.content_part.delta":
-            case "response.text.delta":
-              // Handle various text delta event types
-              const textDelta = (event as any).delta || (event as any).text || "";
-              if (textDelta) {
-                streamedTextLength += textDelta.length;
-                yield {
-                  content: textDelta,
-                  toolCalls: undefined,
-                  finishReason: undefined,
-                };
-              }
-              break;
+    try {
+      for await (const event of stream) {
+        // Debug logging for all events
+        log.debug(`LLM event: ${event.type}`, event);
+        
+        // Handle different event types from Responses API
+        switch (event.type) {
+          case "response.output_text.delta":
+          case "response.content_part.delta":
+          case "response.text.delta":
+            // Handle various text delta event types
+            const textDelta = (event as any).delta || (event as any).text || "";
+            if (textDelta) {
+              streamedTextLength += textDelta.length;
+              yield {
+                content: textDelta,
+                toolCalls: undefined,
+                finishReason: undefined,
+              };
+            }
+            break;
 
-            case "response.function_call_arguments.delta":
-              // Accumulate function call arguments
-              currentToolCallArgs += (event as any).delta || "";
-              break;
+          case "response.function_call_arguments.delta":
+            // Accumulate function call arguments
+            currentToolCallArgs += (event as any).delta || "";
+            break;
 
-            case "response.output_item.added":
-              // Track new function call
-              const item = (event as any).item;
-              if (item?.type === "function_call") {
-                currentToolCallId = item.call_id || "";
-                currentToolCallName = item.name || "";
-                currentToolCallArgs = "";
-              }
-              break;
+          case "response.output_item.added":
+            // Track new function call
+            const item = (event as any).item;
+            if (item?.type === "function_call") {
+              currentToolCallId = item.call_id || "";
+              currentToolCallName = item.name || "";
+              currentToolCallArgs = "";
+            }
+            break;
 
-            case "response.output_item.done":
-              // Function call completed
-              const doneItem = (event as any).item;
-              if (doneItem?.type === "function_call" && currentToolCallName) {
-                yield {
-                  content: "",
-                  toolCalls: [{
-                    id: currentToolCallId,
-                    type: "function" as const,
-                    function: {
-                      name: currentToolCallName,
-                      arguments: currentToolCallArgs || doneItem.arguments || "",
-                    },
-                    index: 0,
-                  }],
-                  finishReason: "tool_calls",
-                };
-                currentToolCallId = "";
-                currentToolCallName = "";
-                currentToolCallArgs = "";
-              }
-              break;
+          case "response.output_item.done":
+            // Function call completed
+            const doneItem = (event as any).item;
+            if (doneItem?.type === "function_call" && currentToolCallName) {
+              yield {
+                content: "",
+                toolCalls: [{
+                  id: currentToolCallId,
+                  type: "function" as const,
+                  function: {
+                    name: currentToolCallName,
+                    arguments: currentToolCallArgs || doneItem.arguments || "",
+                  },
+                  index: 0,
+                }],
+                finishReason: "tool_calls",
+              };
+              currentToolCallId = "";
+              currentToolCallName = "";
+              currentToolCallArgs = "";
+            }
+            break;
 
-            case "response.completed":
-              // Only extract final text if nothing was streamed (fallback for non-streaming responses)
-              const completedResponse = (event as any).response;
-              if (streamedTextLength === 0 && completedResponse?.output) {
-                for (const outputItem of completedResponse.output) {
-                  if (outputItem.type === "message" && outputItem.content) {
-                    for (const contentPart of outputItem.content) {
-                      if (contentPart.type === "output_text" && contentPart.text) {
-                        yield {
-                          content: contentPart.text,
-                          toolCalls: undefined,
-                          finishReason: undefined,
-                        };
-                      }
+          case "response.completed":
+            // Only extract final text if nothing was streamed (fallback for non-streaming responses)
+            const completedResponse = (event as any).response;
+            if (streamedTextLength === 0 && completedResponse?.output) {
+              for (const outputItem of completedResponse.output) {
+                if (outputItem.type === "message" && outputItem.content) {
+                  for (const contentPart of outputItem.content) {
+                    if (contentPart.type === "output_text" && contentPart.text) {
+                      yield {
+                        content: contentPart.text,
+                        toolCalls: undefined,
+                        finishReason: undefined,
+                      };
                     }
                   }
                 }
               }
-              yield {
-                content: "",
-                toolCalls: undefined,
-                finishReason: "stop",
-              };
-              break;
-              
-            default:
-              // Log unhandled event types for debugging
-              log.debug(`Unhandled LLM event type: ${event.type}`);
-              break;
-          }
+            }
+            yield {
+              content: "",
+              toolCalls: undefined,
+              finishReason: "stop",
+            };
+            break;
+            
+          default:
+            // Log unhandled event types for debugging
+            log.debug(`Unhandled LLM event type: ${event.type}`);
+            break;
         }
-        
-        return; // Success, exit retry loop
-        
-      } catch (error) {
-        lastError = error as Error;
-        
-        if (this.isRetryableError(error)) {
-          const delay = this.calculateBackoff(attempt);
-          log.warn(`LLM request failed (attempt ${attempt + 1}/${this.maxRetries}), retrying in ${delay}ms...`);
-          await this.sleep(delay);
-          continue;
-        }
-        
-        throw this.wrapError(error);
       }
+    } catch (error) {
+      throw this.wrapError(error);
     }
-    
-    throw this.wrapError(lastError);
   }
 
   private convertMessagesToInput(messages: Message[]): string | object[] {
     // For simple cases, just use the last user message as input
     // For complex multi-turn, build conversation array
-    if (messages.length === 1 && messages[0].role === "user") {
+    if (messages.length === 1 && messages[0]?.role === "user") {
       return messages[0].content as string;
     }
 
@@ -233,38 +229,6 @@ export class AzureOpenAIClient {
     return inputItems;
   }
 
-  private isRetryableError(error: unknown): boolean {
-    if (error instanceof Error) {
-      const message = error.message.toLowerCase();
-      
-      // Rate limiting
-      if (message.includes("429") || message.includes("rate limit")) {
-        return true;
-      }
-      
-      // Server errors
-      if (message.includes("500") || message.includes("502") || 
-          message.includes("503") || message.includes("504")) {
-        return true;
-      }
-      
-      // Network errors
-      if (message.includes("network") || message.includes("timeout") ||
-          message.includes("econnreset") || message.includes("econnrefused")) {
-        return true;
-      }
-    }
-    
-    return false;
-  }
-
-  private calculateBackoff(attempt: number): number {
-    // Exponential backoff with jitter
-    const exponentialDelay = this.baseDelay * Math.pow(2, attempt);
-    const jitter = Math.random() * 1000;
-    return Math.min(exponentialDelay + jitter, 60000); // Max 60 seconds
-  }
-
   private wrapError(error: unknown): LLMError {
     if (error instanceof LLMError) {
       return error;
@@ -281,9 +245,5 @@ export class AzureOpenAIClient {
       return error.status as number;
     }
     return undefined;
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
