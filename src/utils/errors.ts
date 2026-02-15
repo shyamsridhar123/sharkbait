@@ -72,3 +72,25 @@ export class SecurityError extends SharkbaitError {
     this.name = "SecurityError";
   }
 }
+
+/**
+ * User Error - For expected errors caused by user input or actions
+ * Inspired by Claude Code's error classification
+ */
+export class UserError extends SharkbaitError {
+  public readonly details?: string;
+
+  constructor(message: string, details?: string) {
+    super(message, "USER_ERROR");
+    this.name = "UserError";
+    this.details = details;
+  }
+}
+
+/**
+ * Initialize error handling system
+ */
+export function initErrorHandling(): void {
+  // Set up global error handlers if needed
+  // This is a placeholder for future enhancements
+}
