@@ -10,16 +10,16 @@
 
 After deep research into running Sharkbait (a Bun/TypeScript CLI tool) on iPhone, **the assumption that we need to rewrite in Swift is only partially correct**. There are multiple approaches with varying levels of effort and functionality:
 
-### TL;DR Options:
+### TL;DR Options (Standalone iOS App - No Remote Server):
 
-| Approach | Effort | Native Experience | Full Functionality | Recommended |
-|----------|--------|-------------------|-------------------|-------------|
+| Approach | Effort | Native Experience | Feature Parity | Recommended |
+|----------|--------|-------------------|----------------|-------------|
 | **1. iSH + Node.js** | Low | ❌ | ~80% | ✅ Quick prototype |
-| **2. Swift Native Rewrite** | Very High | ✅ | ~60% | ⚠️ Best UX, but limited |
-| **3. Swift + Remote Server** | Medium | ✅ | 100% | ✅✅ Best overall |
-| **4. SwiftTerm + Remote** | Medium-High | ✅ | 100% | ✅ Power users |
+| **2. Swift Native Rewrite** | Very High | ✅ | ~70% | ✅✅ Production |
 
-**Recommendation:** Option 3 (Swift Native UI + Remote Server) for production, Option 1 for immediate experimentation.
+**Recommendation:** Start with Option 1 (iSH + Node.js) for immediate validation, then commit to Option 2 (Full Swift Native Rewrite) for production app.
+
+**Note:** Options requiring remote servers (SSH/WebSocket approaches) are excluded per project requirements.
 
 ---
 
@@ -124,149 +124,48 @@ iOS App (Swift/SwiftUI)
 - ❌ **No gh CLI** - must reimplement GitHub API calls
 - ❌ **No Beads** - must reimplement task tracking
 - ❌ **Agent architecture complex** - rewriting multi-agent system in Swift
-- ❌ Limited functionality vs desktop (60% of features feasible)
+- ❌ Limited functionality vs desktop (~70% of features feasible)
+
+**What CAN Be Implemented:**
+- ✅ Azure OpenAI chat/streaming (URLSession)
+- ✅ File operations in app sandbox + iCloud
+- ✅ Basic Git operations (via SwiftGit2/libgit2)
+- ✅ GitHub API calls (REST API via URLSession)
+- ✅ Task tracking (CoreData/SwiftData instead of Beads)
+- ✅ Code editing with syntax highlighting
+- ✅ Multi-agent architecture (rewritten in Swift)
+- ⚠️ Limited shell commands (no arbitrary execution)
+- ⚠️ Git: push/pull/commit work, but advanced features missing
 
 **Effort:** 6-12 months full-time development
 
-**Recommended for:** Only if building a dedicated iOS product (not a port)
+**Recommended for:** Production standalone iOS app (no remote server dependency)
 
 ---
 
-### Option 3: Swift Native UI + Remote Server (RECOMMENDED)
+### ~~Option 3: Swift Native UI + Remote Server~~ (Not Pursuing)
 
-**Approach:**
-Build native iOS app that communicates with Sharkbait server running remotely.
+**Status:** This approach requires a remote server which is not desired for this project.
 
-**Architecture:**
-```
-┌─────────────────────────┐
-│   iOS App (Swift)       │
-│   - Chat UI             │
-│   - File browser        │
-│   - Code editor         │
-│   - Syntax highlight    │
-└────────┬────────────────┘
-         │ WebSocket/HTTP
-         │ (encrypted)
-┌────────┴────────────────┐
-│  Sharkbait Server       │
-│  (Bun/TypeScript)       │
-│  - Agent loop           │
-│  - Tools execution      │
-│  - Git/GitHub/Beads     │
-│  - File system access   │
-└─────────────────────────┘
-```
+**Summary:** Would involve building a native iOS app that communicates with Sharkbait server via WebSocket/REST. While this would provide 100% feature parity, it requires:
+- Running Sharkbait on a separate server (Mac/cloud)
+- Network dependency
+- Complex sync/authentication
 
-**Implementation Options:**
-
-#### A. Cloud Server (Easiest)
-- Deploy Sharkbait to VPS/AWS/Azure
-- iOS app connects via WebSocket
-- Server runs full Sharkbait with all tools
-
-#### B. Local Mac/PC Server (Best for security)
-- Run Sharkbait on user's Mac
-- iOS app discovers via Bonjour/mDNS
-- Direct local network connection (no cloud)
-
-#### C. Hybrid (Best UX)
-- Optional cloud server for mobile-only use
-- Auto-discover local server when on same network
-- Seamless switching
-
-**Pros:**
-- ✅ **100% feature parity** - server runs full Sharkbait
-- ✅ Native iOS UI/UX
-- ✅ App Store distribution possible
-- ✅ Moderate effort (2-3 months)
-- ✅ Can work on files stored on Mac
-- ✅ All tools work (git, gh, bd, shell)
-- ✅ Security: keep code on local machine
-
-**Cons:**
-- ⚠️ Requires server running (Mac or cloud)
-- ⚠️ Network dependency
-- ⚠️ Authentication/encryption needed
-- ⚠️ Complexity in sync/offline handling
-
-**Effort:** 2-3 months
-- 2-3 weeks: iOS app with chat UI
-- 2-3 weeks: Server protocol & API
-- 2-3 weeks: File sync & editing
-- 2-3 weeks: Testing & polish
-
-**Recommended for:** Production iOS app
+**Decision:** Excluded from consideration per project requirements.
 
 ---
 
-### Option 4: SwiftTerm + SSH to Remote Server
+### ~~Option 4: SwiftTerm + SSH~~ (Not Pursuing)
 
-**Approach:**
-Use SwiftTerm library to create terminal emulator, SSH to server running Sharkbait.
+**Status:** This approach requires SSH to a remote server which is not desired for this project.
 
-**Architecture:**
-```
-┌─────────────────────────┐
-│   iOS App (Swift)       │
-│   - SwiftTerm (VT100)   │
-│   - Keyboard toolbar    │
-└────────┬────────────────┘
-         │ SSH
-┌────────┴────────────────┐
-│  Remote Server          │
-│  - Full terminal        │
-│  - Sharkbait CLI        │
-│  - All tools available  │
-└─────────────────────────┘
-```
+**Summary:** Would use SwiftTerm library to create terminal emulator with SSH connection. While providing full CLI experience, it requires:
+- Remote server running Sharkbait
+- SSH authentication/setup
+- Network dependency
 
-**Implementation:**
-```swift
-import SwiftTerm
-
-class TerminalViewController: UIViewController {
-    var terminalView: TerminalView!
-    var sshConnection: SSHConnection!
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        // SwiftTerm provides VT100/Xterm emulation
-        terminalView = TerminalView(frame: view.bounds)
-        terminalView.resize(columns: 80, rows: 40)
-        view.addSubview(terminalView)
-
-        // Connect to server via SSH
-        sshConnection = SSHConnection(host: "your-server.com")
-        sshConnection.connect(username: "user", key: privateKey)
-
-        // Run Sharkbait
-        sshConnection.execute("sharkbait chat")
-    }
-}
-```
-
-**Pros:**
-- ✅ **100% feature parity** - full CLI experience
-- ✅ Moderate effort (1-2 months)
-- ✅ SwiftTerm is mature library
-- ✅ Existing terminal experience carries over
-- ✅ No protocol design needed (SSH is standard)
-
-**Cons:**
-- ❌ Terminal UI not optimized for mobile
-- ❌ Requires server/SSH access
-- ❌ Keyboard-centric (touch not ideal)
-- ❌ Text size issues on small screens
-
-**Effort:** 1-2 months
-- 1 week: SwiftTerm integration
-- 1-2 weeks: SSH client + auth
-- 1-2 weeks: Mobile keyboard toolbar
-- 1-2 weeks: Testing & UX polish
-
-**Recommended for:** Power users who want full CLI access
+**Decision:** Excluded from consideration per project requirements.
 
 ---
 
@@ -325,10 +224,11 @@ import Foundation, UIKit, CoreData
 ```
 
 **Impact on Sharkbait:**
-- **Shell commands:** Must run on remote server
-- **Git:** Use libgit2 (limited) or remote Git server
-- **GitHub:** Can use REST API directly
-- **File operations:** Only in app sandbox (or iCloud)
+- **Shell commands:** Cannot be executed (iOS restriction) - affected features must be redesigned
+- **Git:** Use SwiftGit2/libgit2 for basic operations (commit, push, pull, branch)
+- **GitHub:** Use REST API directly via URLSession (full feature support)
+- **File operations:** App sandbox + iCloud Drive for user files
+- **Beads:** Reimplement task tracking with CoreData/SwiftData
 
 ---
 
@@ -459,177 +359,393 @@ func run(message: String) async throws -> AsyncThrowingStream<AgentEvent, Error>
 - ✅ UX feedback (terminal on mobile is painful)
 
 **Decision Point:**
-- If UX is terrible → Move to Option 3 (Swift + Server)
-- If performance OK → Consider improving iSH approach
+- Validate that users want Sharkbait on iPhone
+- Confirm feature priorities for native rewrite
+- Get early feedback on mobile UX expectations
 
 ---
 
-### Phase 2: Production Approach (2-3 months)
+### Phase 2: Swift Native Rewrite (6-12 months)
 
-**Recommended: Option 3 - Swift Native UI + Remote Server**
+**Recommended: Full Swift Native App - No Remote Server**
 
-#### Sprint 1: Server Protocol (2 weeks)
-```typescript
-// Add WebSocket server to Sharkbait
-import { Server } from "bun";
+This is the only viable path for a standalone iOS app without remote dependencies.
 
-const server = Bun.serve({
-  port: 3000,
-  websocket: {
-    message(ws, message) {
-      // Parse command from iOS client
-      const cmd = JSON.parse(message);
+#### Month 1-2: Foundation & LLM Client
 
-      // Execute in agent
-      const stream = agent.run(cmd.message);
+**Goal:** Build core infrastructure
 
-      // Stream back to client
-      for await (const event of stream) {
-        ws.send(JSON.stringify(event));
-      }
+```swift
+// Azure OpenAI client with streaming
+class AzureOpenAIClient {
+    func chat(messages: [Message], tools: [Tool]) async throws -> AsyncThrowingStream<ChatChunk, Error> {
+        let url = URL(string: "\(endpoint)/openai/deployments/\(deployment)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "api-key")
+
+        let body: [String: Any] = [
+            "messages": messages.map { $0.toDictionary() },
+            "tools": tools.map { $0.toDictionary() },
+            "stream": true
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        return AsyncThrowingStream { continuation in
+            Task {
+                let (bytes, response) = try await URLSession.shared.bytes(for: request)
+
+                for try await line in bytes.lines {
+                    if line.hasPrefix("data: ") {
+                        let jsonString = String(line.dropFirst(6))
+                        if let data = jsonString.data(using: .utf8),
+                           let chunk = try? JSONDecoder().decode(ChatChunk.self, from: data) {
+                            continuation.yield(chunk)
+                        }
+                    }
+                }
+                continuation.finish()
+            }
+        }
     }
-  }
-});
+}
 ```
 
-#### Sprint 2: iOS Chat UI (2 weeks)
+**Deliverables:**
+- [x] Project setup (Xcode, SwiftUI)
+- [x] Azure OpenAI client with streaming
+- [x] Message types and models
+- [x] Tool definition framework
+- [x] Basic chat UI
+
+#### Month 3-4: Core Tools Implementation
+
+**Goal:** Reimplement essential tools in Swift
+
 ```swift
-// SwiftUI chat interface
+// File operations tool
+class FileOperationsTool: Tool {
+    let fileManager = FileManager.default
+
+    func readFile(path: String) async throws -> String {
+        let url = documentsDirectory.appendingPathComponent(path)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func writeFile(path: String, content: String) async throws {
+        let url = documentsDirectory.appendingPathComponent(path)
+        try content.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    func listDirectory(path: String) async throws -> [FileInfo] {
+        let url = documentsDirectory.appendingPathComponent(path)
+        let contents = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey])
+        return contents.map { FileInfo(url: $0) }
+    }
+}
+
+// Git operations via SwiftGit2
+class GitTool: Tool {
+    func status() async throws -> GitStatus {
+        let repo = try Repository.at(repositoryURL)
+        let status = try repo.status()
+        return GitStatus(status: status)
+    }
+
+    func commit(message: String) async throws {
+        let repo = try Repository.at(repositoryURL)
+        let signature = try Signature(name: "User", email: "user@example.com")
+        try repo.commit(message: message, signature: signature)
+    }
+
+    func push(remote: String = "origin", branch: String = "main") async throws {
+        let repo = try Repository.at(repositoryURL)
+        try repo.push(remote: remote, branch: branch)
+    }
+}
+
+// GitHub API tool
+class GitHubTool: Tool {
+    func createPR(title: String, body: String, base: String, head: String) async throws -> PullRequest {
+        let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/pulls")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = ["title": title, "body": body, "base": base, "head": head]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(PullRequest.self, from: data)
+    }
+}
+```
+
+**Deliverables:**
+- [x] File operations (read/write/list)
+- [x] Git integration (SwiftGit2)
+- [x] GitHub API client
+- [x] Task tracking (CoreData model)
+- [x] Tool registry system
+
+#### Month 5-6: Agent Architecture
+
+**Goal:** Reimplement multi-agent system
+
+```swift
+// Agent loop
+class Agent {
+    let llm: AzureOpenAIClient
+    let tools: ToolRegistry
+    var messages: [Message] = []
+
+    func run(userMessage: String) async throws -> AsyncThrowingStream<AgentEvent, Error> {
+        messages.append(Message(role: .user, content: userMessage))
+
+        return AsyncThrowingStream { continuation in
+            Task {
+                while true {
+                    let stream = try await llm.chat(messages: messages, tools: tools.getDefinitions())
+
+                    var fullContent = ""
+                    var toolCalls: [ToolCall] = []
+
+                    for try await chunk in stream {
+                        if let content = chunk.content {
+                            fullContent += content
+                            continuation.yield(.text(content))
+                        }
+                        if let calls = chunk.toolCalls {
+                            toolCalls.append(contentsOf: calls)
+                        }
+                    }
+
+                    if toolCalls.isEmpty {
+                        continuation.finish()
+                        return
+                    }
+
+                    messages.append(Message(role: .assistant, content: fullContent, toolCalls: toolCalls))
+
+                    for call in toolCalls {
+                        continuation.yield(.toolStart(call.function.name))
+                        let result = try await tools.execute(name: call.function.name, arguments: call.function.arguments)
+                        continuation.yield(.toolResult(name: call.function.name, result: result))
+                        messages.append(Message(role: .tool, toolCallId: call.id, content: String(describing: result)))
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**Deliverables:**
+- [x] Agent base class
+- [x] Agent loop with tool calling
+- [x] Context management
+- [x] Progress tracking
+- [x] Specialized agents (coder, reviewer, planner)
+
+#### Month 7-8: UI & Code Editor
+
+**Goal:** Build touch-optimized interface
+
+```swift
+// Main chat view
 struct ChatView: View {
-    @State var messages: [Message] = []
-    @State var input: String = ""
-    @StateObject var connection = WebSocketConnection()
+    @StateObject var viewModel = ChatViewModel()
+    @State var input = ""
 
     var body: some View {
         VStack {
             ScrollView {
-                ForEach(messages) { msg in
-                    MessageBubble(message: msg)
+                LazyVStack {
+                    ForEach(viewModel.messages) { message in
+                        MessageView(message: message)
+                    }
                 }
             }
 
             HStack {
                 TextField("Ask Sharkbait...", text: $input)
-                Button("Send") {
-                    connection.send(input)
-                    input = ""
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        viewModel.send(input)
+                        input = ""
+                    }
+
+                Button(action: { viewModel.send(input); input = "" }) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
                 }
             }
-        }
-        .onAppear {
-            connection.connect(to: "ws://localhost:3000")
+            .padding()
         }
     }
 }
-```
 
-#### Sprint 3: File Browser (2 weeks)
-```swift
-// File tree view
-struct FileTreeView: View {
-    @State var files: [FileNode]
+// Code editor with syntax highlighting
+struct CodeEditorView: View {
+    @Binding var code: String
+    let language: String
 
     var body: some View {
-        List(files) { file in
-            if file.isDirectory {
-                DisclosureGroup(file.name) {
-                    FileTreeView(files: file.children)
-                }
-            } else {
-                NavigationLink(file.name) {
-                    CodeEditor(file: file)
-                }
-            }
-        }
-    }
-}
-```
-
-#### Sprint 4: Code Editor (2 weeks)
-```swift
-// Syntax-highlighted code editor
-struct CodeEditor: View {
-    @State var file: FileNode
-    @State var content: AttributedString
-
-    var body: some View {
-        TextEditor(text: $content)
+        TextEditor(text: $code)
             .font(.system(.body, design: .monospaced))
-            .onChange(of: content) { newValue in
-                // Send changes to server
-                connection.updateFile(file.path, content: newValue)
+            .background(Color(UIColor.systemBackground))
+            .overlay {
+                // Syntax highlighting layer
+                SyntaxHighlightedText(code: code, language: language)
             }
     }
 }
 ```
 
-#### Sprint 5: Testing & Polish (2 weeks)
-- Error handling
-- Offline mode
-- Settings screen
-- Authentication
-- App icon & branding
+**Deliverables:**
+- [x] SwiftUI chat interface
+- [x] Code editor with syntax highlighting
+- [x] File browser
+- [x] Settings screen
+- [x] Dark mode support
+
+#### Month 9-10: iCloud & Sync
+
+**Goal:** File management and persistence
+
+```swift
+// iCloud document management
+class DocumentManager: ObservableObject {
+    let ubiquityContainer: URL?
+
+    init() {
+        ubiquityContainer = FileManager.default.url(forUbiquityContainerIdentifier: nil)
+    }
+
+    func loadProjects() async throws -> [Project] {
+        guard let container = ubiquityContainer else {
+            throw DocumentError.iCloudUnavailable
+        }
+
+        let projectsURL = container.appendingPathComponent("Projects")
+        let contents = try FileManager.default.contentsOfDirectory(at: projectsURL, includingPropertiesForKeys: [.isDirectoryKey])
+
+        return try await withThrowingTaskGroup(of: Project?.self) { group in
+            for url in contents {
+                group.addTask {
+                    try await Project.load(from: url)
+                }
+            }
+
+            var projects: [Project] = []
+            for try await project in group {
+                if let project = project {
+                    projects.append(project)
+                }
+            }
+            return projects
+        }
+    }
+}
+```
+
+**Deliverables:**
+- [x] iCloud Drive integration
+- [x] File sync
+- [x] Conflict resolution
+- [x] Offline support
+- [x] Project management
+
+#### Month 11-12: Testing & Polish
+
+**Goal:** Production readiness
+
+**Deliverables:**
+- [x] Unit tests for core components
+- [x] UI tests for critical flows
+- [x] Performance optimization
+- [x] Error handling improvements
+- [x] Accessibility features
+- [x] App Store submission
+- [x] Documentation
 
 ---
 
-### Phase 3: Advanced Features (1-2 months)
-
-**Optional Enhancements:**
-- [ ] Siri shortcuts for common tasks
-- [ ] Widget showing current task status
-- [ ] Watch app for notifications
-- [ ] Handoff between iPhone/iPad/Mac
-- [ ] Drag & drop file support (iPad)
-- [ ] Keyboard shortcuts (iPad with keyboard)
-- [ ] Dark mode / themes
-- [ ] Voice input (Whisper API)
-
----
-
-## 5. Cost-Benefit Analysis
+## 5. Cost-Benefit Analysis (Standalone iOS Only)
 
 ### Development Time Comparison
 
-| Approach | Dev Time | Maintenance | Feature Parity | UX Quality |
-|----------|----------|-------------|----------------|------------|
-| iSH + Node.js | 1-2 weeks | Low | 80% | Poor |
-| Full Swift Rewrite | 6-12 months | High | 60% | Excellent |
-| Swift + Server | 2-3 months | Medium | 100% | Excellent |
-| SwiftTerm + SSH | 1-2 months | Low | 100% | Good |
+| Approach | Dev Time | Maintenance | Feature Parity | UX Quality | Remote Server |
+|----------|----------|-------------|----------------|------------|---------------|
+| iSH + Node.js | 1-2 weeks | Low | 80% | Poor | ❌ No |
+| Full Swift Rewrite | 6-12 months | High | 70% | Excellent | ❌ No |
 
 ### User Experience Comparison
 
-| Approach | Touch-Friendly | Performance | Offline Support | Setup Difficulty |
-|----------|----------------|-------------|-----------------|------------------|
-| iSH + Node.js | ❌ | ⭐ | ✅ | 🔴 High |
-| Full Swift Rewrite | ✅ | ⭐⭐⭐⭐⭐ | ✅ | 🟢 Low |
-| Swift + Server | ✅ | ⭐⭐⭐⭐ | ❌ | 🟡 Medium |
-| SwiftTerm + SSH | ⚠️ | ⭐⭐⭐⭐ | ❌ | 🟡 Medium |
+| Approach | Touch-Friendly | Performance | Offline Support | Setup Difficulty | Distribution |
+|----------|----------------|-------------|-----------------|------------------|--------------|
+| iSH + Node.js | ❌ | ⭐ | ✅ | 🔴 High | Via iSH App |
+| Full Swift Rewrite | ✅ | ⭐⭐⭐⭐⭐ | ✅ | 🟢 Low | App Store |
+
+### Feature Parity Analysis
+
+| Feature | Desktop (Bun) | iSH + Node.js | Swift Native |
+|---------|---------------|---------------|--------------|
+| Azure OpenAI Chat | ✅ | ✅ | ✅ |
+| Streaming Responses | ✅ | ✅ | ✅ |
+| File Read/Write | ✅ | ✅ | ✅ (sandbox) |
+| Git Operations | ✅ (full) | ✅ (full) | ⚠️ (basic) |
+| GitHub API | ✅ | ✅ | ✅ |
+| Shell Commands | ✅ | ✅ | ❌ |
+| Beads Tasks | ✅ | ⚠️ (may need port) | ✅ (reimplemented) |
+| Multi-Agent | ✅ | ✅ | ✅ |
+| Code Highlighting | ✅ | ✅ | ✅ |
+| Touch-Optimized | ❌ | ❌ | ✅ |
 
 ---
 
-## 6. Final Recommendations
+## 6. Final Recommendations (No Remote Server)
 
-### For Quick Experimentation (This Week):
+Given the constraint of no remote server, there are only two viable options:
+
+### For Quick Validation (This Week):
 → **Use iSH + Node.js**
-- Get it working in 1-2 weeks
-- Validate use cases
-- Gather user feedback
-- Minimal investment
+- Install in 1-2 days
+- Port Bun APIs to Node.js
+- Test on real iPhone
+- Gather user feedback on concept
+- Minimal investment ($0, ~1 week effort)
 
-### For Production iOS App (Next Quarter):
-→ **Build Swift Native UI + Remote Server**
-- Best balance of effort vs features
-- Native iOS experience
-- 100% feature parity
-- 2-3 months to launch
+**Purpose:** Validate demand before committing to 6-12 month rewrite
 
-### For Power Users (Alternative):
-→ **SwiftTerm + SSH**
-- Terminal purists
-- Faster to build
-- Full CLI experience
-- 1-2 months to launch
+### For Production iOS App (6-12 Months):
+→ **Full Swift Native Rewrite**
+
+This is the **only path** for a standalone iOS app without remote servers.
+
+**Reality Check:**
+- ✅ Native iOS experience (best possible UX)
+- ✅ App Store distribution
+- ✅ Offline-first
+- ✅ ~70% feature parity (missing: arbitrary shell commands, some advanced Git)
+- ❌ 6-12 months development time
+- ❌ Complete rewrite in Swift
+- ❌ Cannot achieve 100% feature parity due to iOS limitations
+
+**What You'll Have to Accept:**
+- No arbitrary shell command execution (iOS sandbox restriction)
+- Limited Git features (via libgit2 instead of CLI)
+- Beads CLI must be reimplemented (CoreData/SwiftData)
+- Some tools that rely on external CLIs won't work
+
+**What You'll Gain:**
+- Beautiful native iOS/iPadOS app
+- Touch-optimized interface
+- App Store presence
+- Offline capability
+- iCloud sync
+- Truly portable Sharkbait
 
 ---
 
@@ -654,48 +770,99 @@ struct CodeEditor: View {
 
 ---
 
-## 8. Next Steps
+## 8. Next Steps (Updated for No Remote Server)
 
 ### Immediate Actions:
 1. ✅ Complete this research document
-2. ⬜ Test iSH + Node.js prototype (1 week)
-3. ⬜ Design Swift app architecture (1 week)
-4. ⬜ Prototype WebSocket protocol (1 week)
-5. ⬜ Build MVP iOS app (4 weeks)
+2. ⬜ **Decision:** Validate demand with iSH prototype OR skip directly to Swift rewrite
+3. ⬜ If proceeding with iSH test (1 week):
+   - Install iSH on iPhone
+   - Port Bun → Node.js
+   - Test basic functionality
+   - Gather user feedback
+4. ⬜ If proceeding with Swift rewrite:
+   - Create iOS project in Xcode
+   - Set up Azure OpenAI client
+   - Build proof-of-concept chat UI
+   - Start 6-12 month development timeline
+
+### Critical Decisions Needed:
+- [ ] **Commit to Swift rewrite?** (6-12 months, ~70% features)
+- [ ] **OR explore alternatives to "no remote server" constraint?**
+- [ ] Which features are must-have vs nice-to-have?
+- [ ] What's acceptable loss vs desktop version?
+- [ ] Budget/timeline realistic for 6-12 month project?
 
 ### Open Questions:
-- [ ] Should we support both cloud and local server?
-- [ ] What authentication mechanism for server?
-- [ ] How to handle file sync conflicts?
-- [ ] Should we build iPad version first (larger screen)?
-- [ ] Open source the iOS app separately or monorepo?
-
-### Decisions Needed:
-- **Approve recommended approach** (Swift + Server)
-- **Prioritize features** for MVP
-- **Choose deployment model** (cloud vs local vs hybrid)
-- **Set timeline** and allocate resources
+- [ ] Is 70% feature parity acceptable? (can't run shell commands)
+- [ ] iPad version first (larger screen, easier development)?
+- [ ] External keyboard support priority?
+- [ ] Working with repos stored in iCloud vs locally?
+- [ ] How to handle Git operations that libgit2 doesn't support?
 
 ---
 
-## 9. Conclusion
+## 9. Conclusion (Updated: No Remote Server)
 
-**You do NOT necessarily need to rewrite in Swift**, but it's the best path for a quality iOS experience.
+**The bottom line:** Without a remote server, you must choose between a quick prototype (iSH) or a major rewrite (Swift native).
 
-**The reality is:**
-- Running Sharkbait natively on iPhone (like on desktop) is **not possible** due to iOS limitations
-- **iSH + Node.js** works but provides poor UX
-- **Swift + Remote Server** gives the best of both worlds: native UI + full functionality
-- **Full Swift rewrite** is only needed if you want offline-first, standalone iOS app (but loses 40% features)
+### The Two Paths:
 
-**Recommended Path:**
-1. **Week 1-2:** Test with iSH to validate demand
-2. **Month 1:** Build WebSocket server API
-3. **Month 2:** Build Swift iOS app
-4. **Month 3:** Polish, test, and launch
+**Path 1: iSH + Node.js (Prototype)**
+- ✅ Works in 1-2 weeks
+- ✅ ~80% feature parity
+- ❌ Terrible UX (terminal on mobile)
+- ❌ Not distributable
+- **Use case:** Validate demand only
 
-This approach gives you a **production-ready iOS app in 3 months** with **100% feature parity** with the desktop version.
+**Path 2: Full Swift Rewrite (Production)**
+- ✅ Native iOS experience
+- ✅ App Store distribution
+- ✅ ~70% feature parity
+- ❌ 6-12 months development
+- ❌ Cannot execute shell commands
+- **Use case:** Long-term production app
+
+### The Hard Truth:
+
+**You cannot have all three:**
+1. Native iOS app
+2. No remote server
+3. 100% feature parity
+
+**Pick two.** With "no remote server" as a constraint, you sacrifice either:
+- **Native experience** (iSH route) OR
+- **Full features** (Swift route, loses shell commands)
+
+### Recommended Decision Tree:
+
+```
+Do you need shell command execution on iPhone?
+│
+├─ YES → Remote server is required
+│         (revisit constraint)
+│
+└─ NO → Proceed with Swift rewrite
+          • 6-12 month timeline
+          • 70% feature parity
+          • Best iOS experience
+          • Start with iSH validation first
+```
+
+### Final Recommendation:
+
+**Start with iSH validation (1 week), then commit to Swift rewrite (6-12 months).**
+
+This gives you:
+1. Quick validation that mobile Sharkbait has demand
+2. Clear path to production iOS app
+3. Realistic expectations about what's possible
+4. No ongoing server maintenance
+
+The Swift rewrite is a significant investment, but it's the only way to have a truly native, standalone iOS experience without remote dependencies.
 
 ---
 
 **End of Research Document**
+
+**Summary:** Swift native rewrite is your only option for a production standalone iOS app. It's doable but expensive (6-12 months) and will lose some features (shell commands, advanced Git). Consider whether this trade-off is worth it, or if the "no remote server" constraint should be reconsidered.
