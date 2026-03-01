@@ -14,11 +14,19 @@ import { runSetup } from "./commands/setup";
 import { runReview } from "./commands/review";
 import { VERSION } from "./version";
 import { SHARK_LOGO } from "./ui/logo";
+import { existsSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 
-// Check if no args - start chat directly
+// Check if no args - start chat or setup
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  await startChat({});
+  const configExists = existsSync(join(homedir(), ".sharkbait", "config.json"));
+  if (!configExists) {
+    await runSetup();
+  } else {
+    await startChat({});
+  }
   process.exit(0);
 }
 
