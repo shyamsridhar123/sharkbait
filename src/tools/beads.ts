@@ -60,7 +60,7 @@ export const beadsTools: Tool[] = [
         initialized,
         ready: installed && initialized,
         message: !installed 
-          ? "Beads (bd) is not installed. Install with: npm install -g @anthropics/beads"
+          ? "Beads (bd) is not installed. Run 'sharkbait setup' or install manually: npm install -g @beads/bd"
           : !initialized
           ? "Beads is installed but not initialized here. Use beads_init to initialize."
           : "Beads is ready to use.",
@@ -96,7 +96,7 @@ export const beadsTools: Tool[] = [
       if (!(await isBdInstalled())) {
         return {
           success: false,
-          message: "Beads (bd) is not installed. Install with: npm install -g @anthropics/beads",
+          message: "Beads (bd) is not installed. Run 'sharkbait setup' or install manually: npm install -g @beads/bd",
           installed: false,
         };
       }

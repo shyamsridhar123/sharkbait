@@ -55,6 +55,8 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [beadsInstallStatus, setBeadsInstallStatus] = useState<"pending" | "installing" | "installed" | "skipped" | "failed">("pending");
+  const [beadsInstallError, setBeadsInstallError] = useState<string | null>(null);
 
   // Load existing config on mount
   useEffect(() => {
@@ -293,6 +295,30 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
       const envContent = envLines.join("\n") + "\n";
 
       await writeFile(join(configDir, ".env"), envContent);
+
+      // Install Beads (bd CLI) if enabled
+      if (state.enableBeads) {
+        let bdAvailable = false;
+        try {
+          execSync("bd --version", { stdio: "ignore" });
+          bdAvailable = true;
+        } catch {}
+
+        if (!bdAvailable) {
+          setBeadsInstallStatus("installing");
+          try {
+            execSync("npm install -g @beads/bd", { stdio: "ignore", timeout: 60000 });
+            setBeadsInstallStatus("installed");
+          } catch (installErr) {
+            setBeadsInstallStatus("failed");
+            setBeadsInstallError(installErr instanceof Error ? installErr.message : String(installErr));
+          }
+        } else {
+          setBeadsInstallStatus("skipped");
+        }
+      } else {
+        setBeadsInstallStatus("skipped");
+      }
 
       setStep("complete");
     } catch (err) {
@@ -553,6 +579,25 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
             <Text color={colors.text}>  {configDir}/config.json</Text>
             <Text color={colors.text}>  {configDir}/.env</Text>
           </Box>
+          {state.enableBeads && (
+            <Box marginTop={1} flexDirection="column">
+              {beadsInstallStatus === "installed" && (
+                <Text color={colors.success}>{icons.success} Beads (bd) installed successfully</Text>
+              )}
+              {beadsInstallStatus === "skipped" && (
+                <Text color={colors.textMuted}>{icons.success} Beads (bd) already installed</Text>
+              )}
+              {beadsInstallStatus === "failed" && (
+                <>
+                  <Text color={colors.warning}>⚠ Beads (bd) install failed. Install manually:</Text>
+                  <Text color={colors.text}>  npm install -g @beads/bd</Text>
+                  {beadsInstallError && (
+                    <Text color={colors.textDim}>  {beadsInstallError}</Text>
+                  )}
+                </>
+              )}
+            </Box>
+          )}
           <Box marginTop={1} flexDirection="column">
             {state.authMethod === "azure-identity" ? (
               <>
