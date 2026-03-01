@@ -67,17 +67,33 @@ async function isBeadsFunctional(): Promise<{ functional: boolean; useNoDb?: boo
   } catch {}
   
   // Dolt connection failed — try --no-db fallback (reads from JSONL files)
-  if (bdSupportsNoDb()) {
+  try {
+    const result = await exec([BD_PATH, "list", "--json", "--no-db"], { cwd: process.cwd() });
+    if (result.exitCode === 0) {
+      forceNoDb = true;  // Latch: use --no-db for all future commands
+      return { functional: true, useNoDb: true };
+    }
+  } catch {}
+
+  // Last resort: fix metadata.json backend from "dolt" to "no-db" and retry
+  if (tryFixMetadataBackend()) {
+    try {
+      const result = await exec([BD_PATH, "list", "--json"], { cwd: process.cwd() });
+      if (result.exitCode === 0) {
+        return { functional: true, useNoDb: true };
+      }
+    } catch {}
+    // Also try with --no-db flag after metadata fix
     try {
       const result = await exec([BD_PATH, "list", "--json", "--no-db"], { cwd: process.cwd() });
       if (result.exitCode === 0) {
-        forceNoDb = true;  // Latch: use --no-db for all future commands
+        forceNoDb = true;
         return { functional: true, useNoDb: true };
       }
     } catch {}
   }
-  
-  return { functional: false, error: "bd list failed (dolt unreachable and --no-db fallback failed)" };
+
+  return { functional: false, error: "bd list failed (dolt unreachable, --no-db failed, metadata fix failed)" };
 }
 
 // Check if bd executable is available
@@ -90,14 +106,27 @@ async function isBdInstalled(): Promise<boolean> {
   }
 }
 
-// Check if bd supports --no-db flag
-function bdSupportsNoDb(): boolean {
+// Try to fix metadata.json backend from "dolt" to work without dolt server
+// This is a last-resort fix when dolt is dead and bd can't function
+function tryFixMetadataBackend(cwd?: string): boolean {
+  const dir = cwd || process.cwd();
+  const metadataPath = join(dir, ".beads", "metadata.json");
   try {
-    const help = execSync(`${BD_PATH} init --help 2>&1`, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] });
-    return help.includes("--no-db");
-  } catch {
-    return false;
-  }
+    if (!existsSync(metadataPath)) return false;
+    const { readFileSync, writeFileSync } = require("fs");
+    const raw = readFileSync(metadataPath, "utf-8");
+    const meta = JSON.parse(raw);
+    if (meta.backend === "dolt" || meta.database === "dolt") {
+      // Rewrite to no-db backend so bd reads from JSONL
+      meta.backend = "no-db";
+      meta.database = "no-db";
+      delete meta.dolt_mode;
+      delete meta.dolt_database;
+      writeFileSync(metadataPath, JSON.stringify(meta, null, 2));
+      return true;
+    }
+  } catch {}
+  return false;
 }
 
 export const beadsTools: Tool[] = [
@@ -265,21 +294,32 @@ export const beadsTools: Tool[] = [
             alreadyInitialized: true 
           };
         }
-        // .beads exists but not functional — try reinit with --no-db if supported
-        if (bdSupportsNoDb()) {
-          try {
-            const result = await exec([BD_PATH, "init", "--no-db"], { cwd: process.cwd() });
-            if (result.exitCode === 0) {
-              return { 
-                success: true, 
-                message: "Beads reinitialized in no-db mode (dolt was not reachable).",
-                output: result.stdout.trim(),
-                mode: "no-db",
-              };
-            }
-          } catch {}
+        // .beads exists but not functional — try reinit with --no-db
+        try {
+          const result = await exec([BD_PATH, "init", "--no-db"], { cwd: process.cwd() });
+          if (result.exitCode === 0) {
+            // Also fix metadata.json to ensure no-db backend
+            tryFixMetadataBackend();
+            return { 
+              success: true, 
+              message: "Beads reinitialized in no-db mode (dolt was not reachable).",
+              output: result.stdout.trim(),
+              mode: "no-db",
+            };
+          }
+        } catch {}
+        // Reinit failed — try fixing metadata.json directly
+        if (tryFixMetadataBackend()) {
+          const { functional: nowFunctional } = await isBeadsFunctional();
+          if (nowFunctional) {
+            return {
+              success: true,
+              message: "Beads metadata fixed — switched from dolt to no-db mode.",
+              mode: "no-db",
+            };
+          }
         }
-        // Reinit failed or --no-db not supported — report failure gracefully
+        // All reinit attempts failed
         return {
           success: false,
           message: "Beads directory exists but is not functional (dolt may not be running). Could not reinitialize. Proceed with the task without beads and inform the user.",
@@ -287,39 +327,33 @@ export const beadsTools: Tool[] = [
         };
       }
       
-      // Fresh init — try with --no-db first if requested or if dolt isn't available
-      const args = [BD_PATH, "init"];
-      if (noDb && bdSupportsNoDb()) {
-        args.push("--no-db");
-      }
-      
+      // Fresh init — always use --no-db to avoid dolt dependency
       try {
-        const result = await exec(args, { cwd: process.cwd() });
+        const result = await exec([BD_PATH, "init", "--no-db"], { cwd: process.cwd() });
         
-        if (result.exitCode !== 0) {
-          // If normal init failed (dolt not available), try --no-db fallback
-          if (!noDb && bdSupportsNoDb()) {
-            const fallback = await exec([BD_PATH, "init", "--no-db"], { cwd: process.cwd() });
-            if (fallback.exitCode === 0) {
-              return {
-                success: true,
-                message: "Beads initialized in no-db mode (dolt not available, using JSONL).",
-                output: fallback.stdout.trim(),
-                mode: "no-db",
-              };
-            }
-          }
-          return {
-            success: false,
-            message: `Failed to initialize beads: ${result.stderr || result.stdout}. Proceed with the task without beads.`,
-            proceedWithoutBeads: true,
+        if (result.exitCode === 0) {
+          return { 
+            success: true, 
+            message: "Beads initialized in no-db mode (JSONL-backed, no dolt dependency).",
+            output: result.stdout.trim(),
+            mode: "no-db",
           };
         }
         
-        return { 
-          success: true, 
-          message: "Beads initialized successfully.",
-          output: result.stdout.trim(),
+        // --no-db init failed, try normal init as last resort
+        const fallback = await exec([BD_PATH, "init"], { cwd: process.cwd() });
+        if (fallback.exitCode === 0) {
+          return {
+            success: true,
+            message: "Beads initialized successfully.",
+            output: fallback.stdout.trim(),
+          };
+        }
+
+        return {
+          success: false,
+          message: `Failed to initialize beads: ${fallback.stderr || fallback.stdout}. Proceed with the task without beads.`,
+          proceedWithoutBeads: true,
         };
       } catch (error) {
         return {
@@ -534,12 +568,22 @@ export const beadsTools: Tool[] = [
       } catch {}
 
       // If --no-db wasn't already tried, try it now
-      if (!forceNoDb && bdSupportsNoDb()) {
+      if (!forceNoDb) {
         try {
           const noDbArgs = [...args, "--no-db"];
           const result = await exec(noDbArgs);
           if (result.exitCode === 0) {
             forceNoDb = true;
+            return JSON.parse(result.stdout);
+          }
+        } catch {}
+      }
+
+      // Last resort: fix metadata.json backend and retry
+      if (tryFixMetadataBackend()) {
+        try {
+          const result = await exec(bdArgs("list", "--json"));
+          if (result.exitCode === 0) {
             return JSON.parse(result.stdout);
           }
         } catch {}
