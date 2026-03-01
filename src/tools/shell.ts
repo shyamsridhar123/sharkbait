@@ -8,6 +8,7 @@ import { classifyCommand, type CommandSafety } from "../utils/security";
 import { ToolError } from "../utils/errors";
 import { getErrorMessage } from "../utils/security";
 import { exec, spawnBackground } from "../utils/runtime";
+import { resolve } from "path";
 
 export const shellTools: Tool[] = [
   {
@@ -118,8 +119,14 @@ export const shellTools: Tool[] = [
       required: ["path"],
     },
     async execute({ path, application }) {
-      const target = path as string;
+      let target = path as string;
       const app = application as string | undefined;
+
+      // Resolve relative file paths to absolute so browsers don't treat them as hostnames
+      const isUrl = /^https?:\/\//i.test(target);
+      if (!isUrl) {
+        target = resolve(process.cwd(), target);
+      }
 
       // Sanitize application name — only allow known-safe applications
       const SAFE_APPS = [
