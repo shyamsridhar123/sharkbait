@@ -24,6 +24,12 @@ const STALL_THRESHOLD = 3;
 const MAX_REPLANS = 2;
 const MAX_ITERATIONS = 50;
 const MAX_MESSAGES = 200;
+const BEADS_FAIL_LIMIT = 2;  // After 2 beads failures, inject "stop trying beads"
+
+const BEADS_TOOL_NAMES = new Set([
+  "beads_status", "beads_init", "beads_create", "beads_ready",
+  "beads_show", "beads_done", "beads_list", "beads_add_dependency",
+]);
 
 export class AgentLoop {
   private llm: AzureOpenAIClient;
@@ -70,6 +76,8 @@ export class AgentLoop {
 
     let iteration = 0;
     let summaryRequested = false;
+    let beadsFailCount = 0;
+    let beadsAbandoned = false;
 
     while (iteration < MAX_ITERATIONS) {
       iteration++;
@@ -194,6 +202,14 @@ export class AgentLoop {
             content: JSON.stringify(result),
           });
 
+          // Track beads failures from tool results that return proceedWithoutBeads
+          if (BEADS_TOOL_NAMES.has(call.function.name)) {
+            const resultObj = result as Record<string, unknown> | undefined;
+            if (resultObj && (resultObj["proceedWithoutBeads"] || resultObj["success"] === false)) {
+              beadsFailCount++;
+            }
+          }
+
           progressLedger.stepHistory.push({
             step: progressLedger.currentStep++,
             action: call.function.name,
@@ -213,6 +229,11 @@ export class AgentLoop {
             content: JSON.stringify({ error: errorMsg }),
           });
 
+          // Track beads tool errors
+          if (BEADS_TOOL_NAMES.has(call.function.name)) {
+            beadsFailCount++;
+          }
+
           progressLedger.stepHistory.push({
             step: progressLedger.currentStep++,
             action: call.function.name,
@@ -222,6 +243,16 @@ export class AgentLoop {
           });
           progressLedger.stallCount++;
         }
+      }
+
+      // Beads circuit breaker: inject stop message when beads keeps failing
+      if (beadsFailCount >= BEADS_FAIL_LIMIT && !beadsAbandoned) {
+        beadsAbandoned = true;
+        this.messages.push({
+          role: "system",
+          content: "[SYSTEM] Beads has failed multiple times. STOP using ALL beads tools immediately. Proceed with the user's actual task WITHOUT beads. Do NOT call any beads_ tools again. Inform the user that beads is unavailable.",
+        });
+        log.debug("Beads circuit breaker triggered — injected stop message");
       }
 
       this.boundMessages();
@@ -266,10 +297,19 @@ BEADS ARE YOUR MEMORY SYSTEM:
 - Use beads_create at the START of any coding task
 - Use beads_done when you've completed the work
 
+CRITICAL — BEADS FAILURE POLICY:
+If ANY beads tool fails or returns proceedWithoutBeads:
+- Do NOT retry the same beads operation more than ONCE
+- Do NOT try to troubleshoot, fix, or debug beads problems
+- Do NOT install dolt, restart services, or run bd commands via run_command
+- IMMEDIATELY proceed with the user's actual task
+- Inform the user beads is unavailable — their task will proceed without tracking
+- The user's task is ALWAYS more important than beads
+
 Guidelines:
 1. Always read files before editing
 2. Make precise, minimal edits
-3. Create a Bead for EVERY code task
+3. Create a Bead for EVERY code task (but proceed without it if beads fails)
 4. Ask for confirmation before destructive operations
 5. Explain your reasoning clearly
 

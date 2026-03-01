@@ -34,10 +34,26 @@ function getBdPath(): string {
 
 const BD_PATH = getBdPath();
 
-// Check if beads is initialized in current directory
-function isBeadsInitialized(cwd?: string): boolean {
+// Check if .beads directory exists in current directory
+function hasBeadsDir(cwd?: string): boolean {
   const dir = cwd || process.cwd();
   return existsSync(join(dir, ".beads"));
+}
+
+// Check if beads is actually functional (dolt reachable OR no-db mode)
+async function isBeadsFunctional(): Promise<{ functional: boolean; error?: string }> {
+  if (!hasBeadsDir()) {
+    return { functional: false, error: "No .beads directory found" };
+  }
+  try {
+    const result = await exec([BD_PATH, "list", "--json"], { cwd: process.cwd() });
+    if (result.exitCode === 0) {
+      return { functional: true };
+    }
+    return { functional: false, error: result.stderr || "bd list failed" };
+  } catch (err) {
+    return { functional: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 // Check if bd executable is available
@@ -45,6 +61,16 @@ async function isBdInstalled(): Promise<boolean> {
   try {
     const result = await exec([BD_PATH, "--version"]);
     return result.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+// Check if bd supports --no-db flag
+function bdSupportsNoDb(): boolean {
+  try {
+    const help = execSync(`${BD_PATH} init --help 2>&1`, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] });
+    return help.includes("--no-db");
   } catch {
     return false;
   }
@@ -130,7 +156,7 @@ export const beadsTools: Tool[] = [
 
   {
     name: "beads_status",
-    description: "Check if Beads (bd CLI) is installed and initialized in the current directory. ALWAYS call this before using other beads tools. If not installed, use the beads_install tool (never run_command).",
+    description: "Check if Beads (bd CLI) is installed and functional in the current directory. ALWAYS call this before using other beads tools. If not installed, use the beads_install tool (never run_command). If beads is not functional, do NOT keep retrying — proceed with the user's task and inform them beads is unavailable.",
     parameters: {
       type: "object",
       properties: {},
@@ -138,25 +164,49 @@ export const beadsTools: Tool[] = [
     },
     async execute() {
       const installed = await isBdInstalled();
-      const initialized = isBeadsInitialized();
+      const dirExists = hasBeadsDir();
+      
+      if (!installed) {
+        return {
+          installed: false,
+          initialized: false,
+          ready: false,
+          message: "Beads (bd) is not installed. Use the beads_install tool to install it.",
+          bdPath: BD_PATH,
+          proceedWithoutBeads: true,
+        };
+      }
+      
+      if (!dirExists) {
+        return {
+          installed: true,
+          initialized: false,
+          ready: false,
+          message: "Beads is installed but not initialized here. Use beads_init to initialize.",
+          bdPath: BD_PATH,
+        };
+      }
+      
+      // Actually check if beads is functional (dolt reachable or no-db mode)
+      const { functional, error } = await isBeadsFunctional();
       
       return {
-        installed,
-        initialized,
-        ready: installed && initialized,
-        message: !installed 
-          ? "Beads (bd) is not installed. Use the beads_install tool to install it."
-          : !initialized
-          ? "Beads is installed but not initialized here. Use beads_init to initialize."
-          : "Beads is ready to use.",
+        installed: true,
+        initialized: dirExists,
+        functional,
+        ready: functional,
+        message: functional
+          ? "Beads is ready to use."
+          : `Beads directory exists but is not functional: ${error}. Try beads_init to reinitialize, or proceed without beads.`,
         bdPath: BD_PATH,
+        proceedWithoutBeads: !functional,
       };
     },
   },
 
   {
     name: "beads_init",
-    description: "Initialize a Beads database in the current directory. Required before creating tasks.",
+    description: "Initialize a Beads database in the current directory. Required before creating tasks. If beads was previously initialized but is broken, this will attempt to reinitialize. If initialization fails, proceed with the user's task without beads.",
     parameters: {
       type: "object",
       properties: {
@@ -168,26 +218,51 @@ export const beadsTools: Tool[] = [
       required: [],
     },
     async execute({ noDb }) {
-      // Check if already initialized
-      if (isBeadsInitialized()) {
-        return { 
-          success: true, 
-          message: "Beads is already initialized in this directory.",
-          alreadyInitialized: true 
-        };
-      }
-      
-      // Check if bd is installed
+      // Check if bd is installed first
       if (!(await isBdInstalled())) {
         return {
           success: false,
           message: "Beads (bd) is not installed. Use the beads_install tool to install it.",
           installed: false,
+          proceedWithoutBeads: true,
         };
       }
       
+      // If .beads dir exists, check if it's actually functional
+      if (hasBeadsDir()) {
+        const { functional } = await isBeadsFunctional();
+        if (functional) {
+          return { 
+            success: true, 
+            message: "Beads is already initialized and functional in this directory.",
+            alreadyInitialized: true 
+          };
+        }
+        // .beads exists but not functional — try reinit with --no-db if supported
+        if (bdSupportsNoDb()) {
+          try {
+            const result = await exec([BD_PATH, "init", "--no-db"], { cwd: process.cwd() });
+            if (result.exitCode === 0) {
+              return { 
+                success: true, 
+                message: "Beads reinitialized in no-db mode (dolt was not reachable).",
+                output: result.stdout.trim(),
+                mode: "no-db",
+              };
+            }
+          } catch {}
+        }
+        // Reinit failed or --no-db not supported — report failure gracefully
+        return {
+          success: false,
+          message: "Beads directory exists but is not functional (dolt may not be running). Could not reinitialize. Proceed with the task without beads and inform the user.",
+          proceedWithoutBeads: true,
+        };
+      }
+      
+      // Fresh init — try with --no-db first if requested or if dolt isn't available
       const args = [BD_PATH, "init"];
-      if (noDb) {
+      if (noDb && bdSupportsNoDb()) {
         args.push("--no-db");
       }
       
@@ -195,7 +270,23 @@ export const beadsTools: Tool[] = [
         const result = await exec(args, { cwd: process.cwd() });
         
         if (result.exitCode !== 0) {
-          throw new Error(result.stderr || result.stdout || "Failed to initialize beads");
+          // If normal init failed (dolt not available), try --no-db fallback
+          if (!noDb && bdSupportsNoDb()) {
+            const fallback = await exec([BD_PATH, "init", "--no-db"], { cwd: process.cwd() });
+            if (fallback.exitCode === 0) {
+              return {
+                success: true,
+                message: "Beads initialized in no-db mode (dolt not available, using JSONL).",
+                output: fallback.stdout.trim(),
+                mode: "no-db",
+              };
+            }
+          }
+          return {
+            success: false,
+            message: `Failed to initialize beads: ${result.stderr || result.stdout}. Proceed with the task without beads.`,
+            proceedWithoutBeads: true,
+          };
         }
         
         return { 
@@ -206,7 +297,8 @@ export const beadsTools: Tool[] = [
       } catch (error) {
         return {
           success: false,
-          message: `Failed to initialize beads: ${error}`,
+          message: `Failed to initialize beads: ${error}. Proceed with the task without beads.`,
+          proceedWithoutBeads: true,
         };
       }
     },
@@ -224,20 +316,19 @@ export const beadsTools: Tool[] = [
         const result = await exec([BD_PATH, "ready", "--json"]);
         
         if (result.exitCode !== 0) {
-          throw new Error("Failed to get ready tasks");
+          return { tasks: [], message: "Beads not functional. Proceed without beads.", proceedWithoutBeads: true };
         }
         
         return JSON.parse(result.stdout);
-      } catch (error) {
-        // Return empty if beads is not available
-        return { tasks: [], message: "Beads (bd) not available" };
+      } catch {
+        return { tasks: [], message: "Beads (bd) not available. Proceed without beads.", proceedWithoutBeads: true };
       }
     },
   },
 
   {
     name: "beads_create",
-    description: "Create a new task. Requires beads to be initialized first (use beads_status to check, beads_init to initialize).",
+    description: "Create a new task. Requires beads to be initialized first (use beads_status to check, beads_init to initialize). If this fails, do NOT retry — proceed with the user's task without beads and inform them.",
     parameters: {
       type: "object",
       properties: {
@@ -248,12 +339,12 @@ export const beadsTools: Tool[] = [
       required: ["title"],
     },
     async execute({ title, priority, parent }) {
-      // Check if beads is initialized first
-      if (!isBeadsInitialized()) {
+      // Quick functional check
+      if (!hasBeadsDir()) {
         return {
           success: false,
-          error: "Beads is not initialized in this directory. Use beads_init first.",
-          hint: "Call beads_init to set up beads in this repository.",
+          error: "Beads is not initialized in this directory. Use beads_init first, or proceed without beads.",
+          proceedWithoutBeads: true,
         };
       }
       
@@ -271,22 +362,23 @@ export const beadsTools: Tool[] = [
         const result = await exec(args, { cwd: process.cwd() });
         
         if (result.exitCode !== 0) {
-          if (result.stderr.includes("no beads database found")) {
-            return {
-              success: false,
-              error: "Beads database not found. Use beads_init to initialize.",
-              hint: "Run beads_init first, then retry creating the task.",
-            };
-          }
-          throw new Error(result.stderr || "Failed to create task");
+          const errorText = result.stderr || result.stdout || "Unknown error";
+          return {
+            success: false,
+            error: `Failed to create beads task: ${errorText}. Proceed with the user's task without beads — do NOT retry.`,
+            proceedWithoutBeads: true,
+          };
         }
         
         // bd outputs JSON on stdout - extract the JSON object
-        // The output may have warnings before the JSON, so find the JSON block
         const jsonStart = result.stdout.indexOf('{');
         const jsonEnd = result.stdout.lastIndexOf('}');
         if (jsonStart === -1 || jsonEnd === -1) {
-          throw new Error(`No JSON in output: ${result.stdout}`);
+          return {
+            success: false,
+            error: `No JSON in beads output: ${result.stdout}. Proceed without beads.`,
+            proceedWithoutBeads: true,
+          };
         }
         const jsonStr = result.stdout.substring(jsonStart, jsonEnd + 1);
         const parsed = JSON.parse(jsonStr);
@@ -294,7 +386,8 @@ export const beadsTools: Tool[] = [
       } catch (error) {
         return {
           success: false,
-          error: `Failed to create task: ${error}`,
+          error: `Failed to create beads task: ${error}. Proceed with the user's task without beads — do NOT retry.`,
+          proceedWithoutBeads: true,
         };
       }
     },
@@ -315,12 +408,12 @@ export const beadsTools: Tool[] = [
         const result = await exec([BD_PATH, "show", id as string, "--json"]);
         
         if (result.exitCode !== 0) {
-          throw new Error(`Task not found: ${id}`);
+          return { error: `Task not found: ${id}`, proceedWithoutBeads: true };
         }
         
         return JSON.parse(result.stdout);
       } catch (error) {
-        throw new Error(`Failed to get task: ${error}`);
+        return { error: `Failed to get task: ${error}`, proceedWithoutBeads: true };
       }
     },
   },
@@ -343,12 +436,12 @@ export const beadsTools: Tool[] = [
         const result = await exec([BD_PATH, "close", id as string, "-m", msg]);
         
         if (result.exitCode !== 0) {
-          throw new Error(`Failed to complete task: ${id}`);
+          return { success: false, error: `Failed to complete task: ${id}`, proceedWithoutBeads: true };
         }
         
         return { success: true, id, message: msg };
       } catch (error) {
-        throw new Error(`Failed to complete task: ${error}`);
+        return { success: false, error: `Failed to complete task: ${error}`, proceedWithoutBeads: true };
       }
     },
   },
@@ -371,12 +464,12 @@ export const beadsTools: Tool[] = [
         );
         
         if (result.exitCode !== 0) {
-          throw new Error("Failed to add dependency");
+          return { success: false, error: "Failed to add dependency", proceedWithoutBeads: true };
         }
         
         return { success: true, childId, parentId };
       } catch (error) {
-        throw new Error(`Failed to add dependency: ${error}`);
+        return { success: false, error: `Failed to add dependency: ${error}`, proceedWithoutBeads: true };
       }
     },
   },
@@ -413,7 +506,7 @@ export const beadsTools: Tool[] = [
         
         return JSON.parse(result.stdout);
       } catch {
-        return { tasks: [], message: "Beads (bd) not available" };
+        return { tasks: [], message: "Beads (bd) not available. Proceed without beads.", proceedWithoutBeads: true };
       }
     },
   },

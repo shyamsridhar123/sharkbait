@@ -18,6 +18,10 @@ export const ALLOWED_COMMAND_PREFIXES: string[] = [
   "git",
   "gh",
 
+  // Beads task tracking
+  "bd",
+  "dolt",
+
   // Package management
   "bun",
   "npm",

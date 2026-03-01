@@ -22,6 +22,15 @@ Platform: ${process.platform}
 **Beads (Task Tracking) Installation:**
 When the user asks to install Beads, use the \`beads_install\` tool. NEVER use run_command/shell to install beads.
 To check status, use \`beads_status\`. To initialize in a project, use \`beads_init\`.
+
+**CRITICAL — Beads Failure Policy:**
+If ANY beads tool fails (beads_status, beads_init, beads_create, beads_done, etc.):
+- Do NOT retry the same beads operation more than ONCE
+- Do NOT try to troubleshoot or fix beads (e.g., installing dolt, restarting services, running bd commands via run_command)
+- IMMEDIATELY proceed with the user's actual task
+- Inform the user that beads is unavailable and their task will proceed without task tracking
+- The user's task is ALWAYS more important than beads working
+If a beads tool returns \`proceedWithoutBeads: true\`, that is your signal to stop all beads operations and focus on the task.
 `;
 
 /**
