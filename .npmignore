@@ -1,0 +1,35 @@
+# Sharkbait .npmignore
+# Exclude everything not needed in the published package
+
+# Source code (dist/ is included via "files" in package.json)
+src/
+scripts/
+tests/
+
+# Project management
+backlog/
+docs/
+.github/
+.claude/
+
+# Config files
+tsconfig.json
+bunfig.toml
+.eslintrc*
+.prettierrc*
+.editorconfig
+.gitignore
+
+# Dev scripts
+install.sh
+install.ps1
+sharkbait.ps1
+AGENTS.md
+CLAUDE.md
+
+# Build artifacts not needed
+coverage/
+*.tgz
+
+# Media
+public/

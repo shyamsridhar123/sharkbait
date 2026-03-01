@@ -12,9 +12,7 @@ import { askQuestion } from "./commands/ask";
 import { runTask } from "./commands/run";
 import { runSetup } from "./commands/setup";
 import { runReview } from "./commands/review";
-
-// Version hardcoded for compiled binary compatibility
-const VERSION = "1.0.0";
+import { VERSION } from "./version";
 
 // Check if no args - start chat directly
 const args = process.argv.slice(2);

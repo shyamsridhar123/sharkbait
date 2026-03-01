@@ -1,7 +1,7 @@
-# Sharkbait 🦈
+# Sharkbait
 
 <p align="center">
-  <img src="public/images/Nemo-FN.png" alt="Sharkbait Logo" width="300">
+  <img src="public/gifs/sharkbait-ooh-ha-ha.gif" alt="Sharkbait OOH HA HA!" width="400">
 </p>
 
 <p align="center">
@@ -10,9 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="#installation">Installation</a> •
   <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#skills--plugins">Skills & Plugins</a> •
   <a href="#usage">Usage</a> •
+  <a href="#architecture">Architecture</a> •
   <a href="#license">License</a>
 </p>
 
@@ -22,17 +24,76 @@
   <img src="https://img.shields.io/badge/language-TypeScript-blue.svg" alt="TypeScript">
   <img src="https://img.shields.io/badge/status-experimental-red.svg" alt="Experimental">
   <img src="https://img.shields.io/badge/fish_are_friends-not_food-brightgreen.svg" alt="Fish are friends">
+  <img src="https://img.shields.io/badge/tools-36-blueviolet.svg" alt="36 Tools">
+  <img src="https://img.shields.io/badge/agents-7-teal.svg" alt="7 Agents">
 </p>
 
----
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
 
-> ⚠️ **Experimental**: This project is under active development. APIs may change, features may break, and Dory might forget what she was doing. Use at your own risk!
+> **Experimental**: This project is under active development. APIs may change, features may break, and Dory might forget what she was doing. Use at your own risk!
 
 > *"Just keep coding, just keep coding..."* — Dory, probably
 
 Sharkbait is a CLI-based AI coding assistant built with Bun and TypeScript. It uses the **OpenAI Responses API** (not Chat Completions) for enhanced tool calling and streaming. Like Nemo escaping the dentist's fish tank, it helps you break free from tedious coding tasks.
 
-### 🧠 The Memory Problem
+The development environment is powered by **Anthropic skills** and **Claude Code plugins** that provide specialized workflows across design, engineering, research, and operations.
+
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
+
+## The ASCII Shark
+
+```
+                              +.+++.
+                            ## ....-### -
+                           +  ###++++-#++-
+                           - ##+-++--+-+--.
+                             #++++-+-------..
+                           - -#+-----++-.....
+                           ##-.----+-.  ###########
+                           #..-++--. +#####+.   .. .
+                       ####..--+--..##. ...-+####++-.
+                     #  . .-.--+-. ## .+++++++++++-++..
+                    # ##+### -+--.## .--+++++++++++++-+
+                   + .#+-###.--+.-# -+--------+++++-...
+                     -#.-###.--- #+.+---... ...-+++-.###
+                  ###.--+##-.++.## ---...####...-+++- .###
+    #           .. ##- --## -#.-#.-+...##   ###.-++++   ##+
+   #- ###+--+#---#- # +++-..#-.+# +-.-##.    ##-.-+++#####.
+  ## ##---+##+--++#+.+-+-+--+-.+#.+-.####--.###+.-+++.###+.
+  # .#+++----++-+-++.#..+-.---.#+---..########..-++++-....-+##-.
+  #. #++##++--+----+--#.#-----.#+-----........-+++++++++++-----+#.
+  #- #++-+++++++--+++.# -#..--.+#.--------....--+++++--.--.#++++#+
+  +# ##---+++++++---+.+#.-#+---.#+..-------++--.....--++-.++--++#.
+   # .##+++--++-++-+-....++- ....+#...----++--++####++..-##++++##
+    #  ###+++-++-++..  .    +##..+.+#-......------....+#+++++##-
+     #   #####+++.           ## ++--+.  ..      .-###########-
+       #.    .+.                ..- +.               .###-
+           #-.                +   #
+```
+
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
+
+## Features
+
+<p align="center">
+  <img src="public/gifs/nemo-swimming.gif" alt="Nemo Swimming" width="350">
+</p>
+
+- **Fast** — Built on Bun. Swims through code faster than Marlin crossing the EAC
+- **Responses API** — Uses OpenAI's Responses API for better streaming and tool calling
+- **Tool-equipped** — File ops, shell commands, Git, GitHub. Everything but the Ring of Fire
+- **Persistent Memory** — Beads give your AI long-term memory that survives sessions (unlike Dory)
+- **Git-backed Context** — Your AI's memory lives in your repo. Clone it, branch it, merge it
+- **Beautiful UI** — Ink-based terminal interface. P. Sherman would approve
+- **Safe** — Confirms dangerous operations before executing. No surprise `rm -rf` moments
+
+### The Memory Problem
 
 Most AI coding assistants have the memory of... well, Dory. They forget context between sessions, lose track of what you were working on, and make you repeat yourself constantly.
 
@@ -50,25 +111,121 @@ Most AI coding assistants have the memory of... well, Dory. They forget context 
   </picture>
 </p>
 
-## Features
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
 
-- 🐠 **Fast** — Built on Bun. Swims through code faster than Marlin crossing the EAC
-- 🤖 **Responses API** — Uses OpenAI's Responses API for better streaming and tool calling
-- 🔧 **Tool-equipped** — File ops, shell commands, Git, GitHub. Everything but the Ring of Fire
-- 🧠 **Persistent Memory** — Beads give your AI long-term memory that survives sessions (unlike Dory)
-- 📋 **Git-backed Context** — Your AI's memory lives in your repo. Clone it, branch it, merge it
-- 🎨 **Beautiful UI** — Ink-based terminal interface. P. Sherman would approve
-- 🔒 **Safe** — Confirms dangerous operations before executing. No surprise `rm -rf` moments
+## Skills & Plugins
+
+<p align="center">
+  <img src="public/gifs/just-keep-swimming.gif" alt="Just Keep Swimming" width="350">
+</p>
+
+Sharkbait's development environment ships with the full [Anthropic Skills](https://github.com/anthropics/skills) catalog and a curated set of Claude Code plugins. These are used during development with Claude Code — they are not runtime features of the Sharkbait application itself.
+
+### Installed Anthropic Skills
+
+| Category | Skills | What They Do |
+|----------|--------|--------------|
+| **Design** | `canvas-design`, `frontend-design`, `brand-guidelines`, `theme-factory` | Visual art, production-grade UI, brand colors, themed styling |
+| **Art & Media** | `algorithmic-art`, `slack-gif-creator` | Generative art with p5.js, animated GIF creation |
+| **Documents** | `docx`, `pdf`, `pptx`, `xlsx`, `doc-coauthoring` | Create/edit Office docs, PDFs, spreadsheets, co-author documents |
+| **Engineering** | `web-artifacts-builder`, `mcp-builder`, `webapp-testing` | Multi-component web apps, MCP servers, browser testing |
+| **Meta** | `skill-creator`, `internal-comms` | Create new skills, write internal communications |
+
+### Active Plugins
+
+<details>
+<summary><strong>Core Engineering (14 plugins)</strong></summary>
+
+| Plugin | Purpose |
+|--------|---------|
+| `compound-engineering` | Multi-agent workflows: plan, brainstorm, review, work |
+| `feature-dev` | Guided feature development with codebase understanding |
+| `code-review` | PR review with specialized analysis agents |
+| `pr-review-toolkit` | Silent failure hunting, type design, test coverage |
+| `code-simplifier` | Post-implementation code clarity pass |
+| `coderabbit` | AI code review on changes |
+| `hookify` | Create hooks to prevent unwanted behaviors |
+| `plugin-dev` | Build and validate Claude Code plugins |
+| `agent-sdk-dev` | Verify Agent SDK applications |
+| `claude-code-setup` | Automation recommendations |
+| `claude-md-management` | CLAUDE.md auditing and improvement |
+| `playground` | Interactive HTML playground creation |
+| `commit-commands` | Commit, push, PR workflows |
+| `github` | GitHub integration |
+
+</details>
+
+<details>
+<summary><strong>Language Servers (11 LSPs)</strong></summary>
+
+| Plugin | Language |
+|--------|----------|
+| `typescript-lsp` | TypeScript/JavaScript |
+| `pyright-lsp` | Python |
+| `gopls-lsp` | Go |
+| `clangd-lsp` | C/C++ |
+| `csharp-lsp` | C# |
+| `jdtls-lsp` | Java |
+| `kotlin-lsp` | Kotlin |
+| `lua-lsp` | Lua |
+| `php-lsp` | PHP |
+| `rust-analyzer-lsp` | Rust |
+| `swift-lsp` | Swift |
+
+</details>
+
+<details>
+<summary><strong>Knowledge Work (10 plugins)</strong></summary>
+
+| Plugin | Domain |
+|--------|--------|
+| `data` | SQL, dashboards, visualizations, statistical analysis |
+| `marketing` | Campaigns, brand voice, SEO, content, competitive analysis |
+| `finance` | Journal entries, reconciliation, SOX, variance analysis |
+| `legal` | Contract review, NDA triage, compliance checks |
+| `product-management` | Specs, roadmaps, sprint planning, user research |
+| `sales` | Pipeline, forecasting, outreach, competitive intel |
+| `customer-support` | Triage, research, escalation, KB articles |
+| `enterprise-search` | Cross-source search, knowledge synthesis |
+| `productivity` | Task management, memory systems |
+| `bio-research` | PubMed, ChEMBL, clinical trials, bioRxiv, scRNA-seq |
+
+</details>
+
+<details>
+<summary><strong>Utilities & AI (5 plugins)</strong></summary>
+
+| Plugin | Purpose |
+|--------|---------|
+| `ralph-loop` | Autonomous agent loop |
+| `huggingface-skills` | HF Hub: models, datasets, training, evaluation |
+| `context7` | Up-to-date library documentation |
+| `playwright` | Browser automation and testing |
+| `frontend-design` | Production-grade frontend components |
+
+</details>
+
+### Compound Engineering Workflows
+
+The `compound-engineering` plugin provides multi-agent orchestration:
+
+| Workflow | Command | Description |
+|----------|---------|-------------|
+| **Plan** | `/plan` | Transform feature descriptions into structured plans |
+| **Brainstorm** | `/brainstorm` | Explore requirements through collaborative ideation |
+| **Work** | `/work` | Execute plans efficiently with quality gates |
+| **Review** | `/review` | Exhaustive multi-agent code review |
+| **Compound** | `/compound` | Document solved problems for future reference |
+
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
 
 ## Installation
 
 ```bash
-# Using npm
-npm install -g sharkbait
-
-# Using bun
-bun add -g sharkbait
-
 # From source
 git clone https://github.com/shyamsridhar123/sharkbait.git
 cd sharkbait
@@ -99,6 +256,10 @@ export AZURE_OPENAI_DEPLOYMENT="gpt-codex-5.2"
 cp .env.example .env
 # Edit .env with your credentials
 ```
+
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
 
 ## Usage
 
@@ -169,16 +330,20 @@ During an interactive chat session, use slash commands for quick actions:
 **Example:** Run a parallel code review:
 ```
 > /review src/auth.ts
-🔀 Starting parallel review: bugs, security, style, performance on src/auth.ts
+Starting parallel review: bugs, security, style, performance on src/auth.ts
 [Progress bars for each reviewer mode]
-📋 Parallel Review Complete (12.3s)
+Parallel Review Complete (12.3s)
 ```
 
-📖 [Full Slash Commands Reference](docs/COMMANDS.md)
+[Full Slash Commands Reference](docs/COMMANDS.md)
+
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
 
 ## Available Tools
 
-Sharkbait has access to 33 tools across different categories:
+Sharkbait has access to 36 tools across different categories:
 
 | Category | Tools |
 |----------|-------|
@@ -187,6 +352,7 @@ Sharkbait has access to 33 tools across different categories:
 | **Beads** | `beads_status`, `beads_init`, `beads_ready`, `beads_create`, `beads_show`, `beads_done`, `beads_add_dependency`, `beads_list` |
 | **Git** | `git_status`, `git_diff`, `git_commit`, `git_push`, `git_branch`, `git_log` |
 | **GitHub** | `github_create_pr`, `github_list_prs`, `github_merge_pr`, `github_create_issue`, `github_workflow_status`, `github_pr_view`, `github_issue_list` |
+| **Codebase** | `analyze_codebase`, `find_dependencies`, `map_architecture` |
 | **Web/Fetch** | `fetch_webpage`, `fetch_json`, `web_search` |
 
 ## Specialized Agents
@@ -203,7 +369,15 @@ Sharkbait uses a multi-agent architecture with specialized agents for different 
 | **Debugger** | Traces issues and diagnoses bugs |
 | **Parallel Executor** | Runs multiple agent tasks concurrently (e.g., parallel code reviews) |
 
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
+
 ## Architecture
+
+<p align="center">
+  <img src="public/art/architecture.svg" alt="Sharkbait Architecture Diagram" width="800">
+</p>
 
 Sharkbait implements a sophisticated agentic loop with:
 
@@ -211,6 +385,18 @@ Sharkbait implements a sophisticated agentic loop with:
 - **Intelligent context compaction**: Preserves critical context while managing token limits
 - **Action reversibility classification**: Classifies commands as easy/effort/irreversible
 - **Stall detection & recovery**: Automatic re-planning when stuck
+
+### Tech Stack
+
+| Component | Technology | Reason |
+|-----------|------------|--------|
+| Runtime | Bun | Fast startup, native TS |
+| Language | TypeScript | Type safety |
+| LLM | Azure OpenAI GPT Codex 5.2 | Enterprise |
+| Memory | Beads (built-in) | Git-backed persistence |
+| GitHub | git + gh CLI | No Octokit needed |
+| CLI UI | ink | React for terminals |
+| CLI Framework | commander | Argument parsing |
 
 ## Development
 
@@ -239,7 +425,7 @@ bun run build:all
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
 | `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL | (required) |
-| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | (required) |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key (falls back to Azure Identity if unset) | (optional) |
 | `AZURE_OPENAI_DEPLOYMENT` | Model deployment name | `gpt-codex-5.2` |
 | `AZURE_OPENAI_API_VERSION` | API version (Responses API requires 2025-03-01-preview+) | `2025-03-01-preview` |
 | `SHARKBAIT_LOG_LEVEL` | Log level (debug/info/warn/error) | `info` |
@@ -251,9 +437,11 @@ bun run build:all
 | `SHARKBAIT_CONFIRM_DESTRUCTIVE` | Require confirmation for destructive commands | `true` |
 | `SHARKBAIT_WORKING_DIR` | Default working directory | (current directory) |
 
-## Logging & Monitoring
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
 
-Sharkbait includes a comprehensive observability stack:
+## Logging & Monitoring
 
 ### Structured Logging
 
@@ -298,10 +486,10 @@ Built-in metrics track:
 
 Trace agent execution with OpenTelemetry-inspired spans:
 ```
-✓ [agent] coder (1250ms)
-  ✓ [llm] gpt-codex-5.2 (800ms)
-  ✓ [tool] file_read (45ms)
-  ✓ [tool] file_write (120ms)
+agent: coder (1250ms)
+  llm: gpt-codex-5.2 (800ms)
+  tool: file_read (45ms)
+  tool: file_write (120ms)
 ```
 
 ### Telemetry (Opt-in)
@@ -333,6 +521,33 @@ Sharkbait stores configuration in `~/.sharkbait/config.json`. Example:
 }
 ```
 
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
+
+## Generative Art Gallery
+
+Created with the `algorithmic-art` and `canvas-design` skills:
+
+<p align="center">
+  <img src="public/art/ocean-flow-field.png" alt="Ocean Flow Field" width="600" style="border-radius: 8px;">
+  <br><em>Ocean Flow Field — 4,000 particles tracing noise-driven current vectors</em>
+</p>
+
+<p align="center">
+  <img src="public/art/coral-reef-pattern.png" alt="Coral Reef Pattern" width="600" style="border-radius: 8px;">
+  <br><em>Coral Reef — Circle-packed generative polyp colonies</em>
+</p>
+
+<p align="center">
+  <img src="public/art/depth-gradient-banner.png" alt="Depth Gradient" width="600" style="border-radius: 8px;">
+  <br><em>Depth Gradient — Five ocean zones from sunlit to hadal with bioluminescence</em>
+</p>
+
+<p align="center">
+  <img src="public/gifs/ocean-divider.gif" alt="~" width="600">
+</p>
+
 ## Security
 
 Sharkbait includes multiple layers of security:
@@ -349,3 +564,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contributing
 
 Contributions welcome! Please see the backlog in `backlog/tasks/` for open items.
+
+<p align="center">
+  <img src="public/gifs/eac-current.gif" alt="EAC Current - Righteous!" width="450">
+  <br>
+  <em>"You so totally rock, Squirt!" — Crush</em>
+</p>

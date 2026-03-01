@@ -1,0 +1,436 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" width="960" height="720">
+  <defs>
+    <!-- Ocean gradient background -->
+    <linearGradient id="ocean-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a3060"/>
+      <stop offset="40%" stop-color="#072045"/>
+      <stop offset="100%" stop-color="#040e25"/>
+    </linearGradient>
+
+    <!-- Layer card gradient -->
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#112a4a" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0d1f38" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <!-- Agent node gradients -->
+    <linearGradient id="orch-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff7f27"/>
+      <stop offset="100%" stop-color="#cc5500"/>
+    </linearGradient>
+    <linearGradient id="agent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e6ea1"/>
+      <stop offset="100%" stop-color="#134a6e"/>
+    </linearGradient>
+    <linearGradient id="tool-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2a7a5a"/>
+      <stop offset="100%" stop-color="#1a5a3a"/>
+    </linearGradient>
+    <linearGradient id="ext-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5a3a8a"/>
+      <stop offset="100%" stop-color="#3a2060"/>
+    </linearGradient>
+    <linearGradient id="llm-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8a5a2a"/>
+      <stop offset="100%" stop-color="#6a3a1a"/>
+    </linearGradient>
+
+    <!-- Glow filter -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="soft-glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Bubble -->
+    <radialGradient id="bubble-grad" cx="35%" cy="35%">
+      <stop offset="0%" stop-color="#b0d8ff" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#4090cc" stop-opacity="0.1"/>
+    </radialGradient>
+  </defs>
+
+  <style>
+    @keyframes swim-nemo {
+      0%   { transform: translate(0, 0); }
+      25%  { transform: translate(100px, -15px); }
+      50%  { transform: translate(200px, 5px); }
+      75%  { transform: translate(300px, -10px); }
+      100% { transform: translate(400px, 0); }
+    }
+    @keyframes swim-nemo-wrap {
+      0%   { transform: translate(0, 0); }
+      100% { transform: translate(960px, 0); }
+    }
+    @keyframes bubble-rise {
+      0%   { transform: translateY(0); opacity: 0.6; }
+      80%  { opacity: 0.3; }
+      100% { transform: translateY(-720px); opacity: 0; }
+    }
+    @keyframes data-pulse {
+      0%   { opacity: 0.3; }
+      50%  { opacity: 1; }
+      100% { opacity: 0.3; }
+    }
+    @keyframes flow-down {
+      0%   { stroke-dashoffset: 20; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes gentle-bob {
+      0%   { transform: translateY(0); }
+      50%  { transform: translateY(-4px); }
+      100% { transform: translateY(0); }
+    }
+    @keyframes wave-border {
+      0%   { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: -40; }
+    }
+    @keyframes node-pulse {
+      0%   { stroke-opacity: 0.4; }
+      50%  { stroke-opacity: 1; }
+      100% { stroke-opacity: 0.4; }
+    }
+    @keyframes caustic {
+      0%   { opacity: 0.15; }
+      50%  { opacity: 0.35; }
+      100% { opacity: 0.15; }
+    }
+    @keyframes ray-shift {
+      0%   { opacity: 0.08; transform: translateX(0); }
+      50%  { opacity: 0.18; transform: translateX(10px); }
+      100% { opacity: 0.08; transform: translateX(0); }
+    }
+
+    .nemo-group {
+      animation: swim-nemo-wrap 18s linear infinite;
+    }
+    .nemo-bob {
+      animation: gentle-bob 1.5s ease-in-out infinite;
+    }
+    .bubble { animation: bubble-rise linear infinite; }
+    .b1 { animation-duration: 12s; animation-delay: 0s; }
+    .b2 { animation-duration: 15s; animation-delay: 2s; }
+    .b3 { animation-duration: 10s; animation-delay: 4s; }
+    .b4 { animation-duration: 14s; animation-delay: 1s; }
+    .b5 { animation-duration: 11s; animation-delay: 3s; }
+    .b6 { animation-duration: 13s; animation-delay: 5s; }
+    .b7 { animation-duration: 16s; animation-delay: 0.5s; }
+    .b8 { animation-duration: 9s;  animation-delay: 6s; }
+
+    .flow-arrow {
+      stroke-dasharray: 6 4;
+      animation: flow-down 0.8s linear infinite;
+    }
+    .data-dot {
+      animation: data-pulse 2s ease-in-out infinite;
+    }
+    .dd1 { animation-delay: 0s; }
+    .dd2 { animation-delay: 0.5s; }
+    .dd3 { animation-delay: 1s; }
+    .dd4 { animation-delay: 1.5s; }
+
+    .wave-rect {
+      stroke-dasharray: 8 4;
+      animation: wave-border 2s linear infinite;
+    }
+    .agent-node {
+      animation: node-pulse 3s ease-in-out infinite;
+    }
+    .an1 { animation-delay: 0s; }
+    .an2 { animation-delay: 0.4s; }
+    .an3 { animation-delay: 0.8s; }
+    .an4 { animation-delay: 1.2s; }
+    .an5 { animation-delay: 1.6s; }
+    .an6 { animation-delay: 2.0s; }
+
+    .caustic-patch {
+      animation: caustic 4s ease-in-out infinite;
+    }
+    .cp1 { animation-delay: 0s; }
+    .cp2 { animation-delay: 1.5s; }
+    .cp3 { animation-delay: 3s; }
+
+    .light-ray {
+      animation: ray-shift 6s ease-in-out infinite;
+    }
+    .lr1 { animation-delay: 0s; }
+    .lr2 { animation-delay: 2s; }
+    .lr3 { animation-delay: 4s; }
+
+    text { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+    .title-text { font-size: 22px; font-weight: 700; fill: #e8f0ff; }
+    .subtitle-text { font-size: 12px; fill: #8ab4d8; font-style: italic; }
+    .layer-label { font-size: 13px; font-weight: 600; fill: #c0d8f0; }
+    .node-label { font-size: 10px; font-weight: 600; fill: #ffffff; text-anchor: middle; }
+    .node-sub { font-size: 8px; fill: #c0d8e8; text-anchor: middle; }
+    .section-label { font-size: 10px; fill: #6a90b0; font-weight: 500; }
+  </style>
+
+  <!-- Background -->
+  <rect width="960" height="720" fill="url(#ocean-bg)"/>
+
+  <!-- Light rays -->
+  <g class="light-ray lr1">
+    <polygon points="200,0 230,0 310,720 180,720" fill="#1a3a6a" opacity="0.12"/>
+  </g>
+  <g class="light-ray lr2">
+    <polygon points="500,0 540,0 640,720 480,720" fill="#1a3a6a" opacity="0.10"/>
+  </g>
+  <g class="light-ray lr3">
+    <polygon points="750,0 780,0 850,720 720,720" fill="#1a3a6a" opacity="0.10"/>
+  </g>
+
+  <!-- Caustic light patches -->
+  <ellipse class="caustic-patch cp1" cx="150" cy="60" rx="80" ry="25" fill="#2060a0" opacity="0.2"/>
+  <ellipse class="caustic-patch cp2" cx="500" cy="40" rx="100" ry="20" fill="#2060a0" opacity="0.15"/>
+  <ellipse class="caustic-patch cp3" cx="800" cy="55" rx="70" ry="22" fill="#2060a0" opacity="0.18"/>
+
+  <!-- Bubbles -->
+  <circle class="bubble b1" cx="80"  cy="680" r="5" fill="url(#bubble-grad)" stroke="#5ab0e0" stroke-width="0.8"/>
+  <circle class="bubble b2" cx="250" cy="700" r="7" fill="url(#bubble-grad)" stroke="#5ab0e0" stroke-width="0.8"/>
+  <circle class="bubble b3" cx="420" cy="690" r="4" fill="url(#bubble-grad)" stroke="#5ab0e0" stroke-width="0.8"/>
+  <circle class="bubble b4" cx="600" cy="710" r="6" fill="url(#bubble-grad)" stroke="#5ab0e0" stroke-width="0.8"/>
+  <circle class="bubble b5" cx="730" cy="685" r="5" fill="url(#bubble-grad)" stroke="#5ab0e0" stroke-width="0.8"/>
+  <circle class="bubble b6" cx="870" cy="695" r="8" fill="url(#bubble-grad)" stroke="#5ab0e0" stroke-width="0.8"/>
+  <circle class="bubble b7" cx="340" cy="705" r="3" fill="url(#bubble-grad)" stroke="#5ab0e0" stroke-width="0.8"/>
+  <circle class="bubble b8" cx="550" cy="715" r="5" fill="url(#bubble-grad)" stroke="#5ab0e0" stroke-width="0.8"/>
+
+  <!-- Title -->
+  <text x="480" y="32" text-anchor="middle" class="title-text" filter="url(#soft-glow)">Sharkbait Architecture</text>
+  <text x="480" y="50" text-anchor="middle" class="subtitle-text">"Fish are friends, not food" — Multi-Agent Agentic Loop</text>
+
+  <!-- ═══════════ LAYER 1: Terminal Interface ═══════════ -->
+  <g>
+    <rect x="60" y="65" width="840" height="55" rx="8" fill="url(#card-grad)"
+          stroke="#2a6090" stroke-width="1.5" class="wave-rect"/>
+    <text x="80" y="85" class="layer-label">Terminal Interface</text>
+    <!-- Components -->
+    <rect x="250" y="75" width="90" height="32" rx="5" fill="#1a4a70" stroke="#3080b0" stroke-width="1"/>
+    <text x="295" y="95" class="node-label">Ink UI</text>
+    <rect x="360" y="75" width="90" height="32" rx="5" fill="#1a4a70" stroke="#3080b0" stroke-width="1"/>
+    <text x="405" y="95" class="node-label">Messages</text>
+    <rect x="470" y="75" width="90" height="32" rx="5" fill="#1a4a70" stroke="#3080b0" stroke-width="1"/>
+    <text x="515" y="95" class="node-label">Spinners</text>
+    <rect x="580" y="75" width="90" height="32" rx="5" fill="#1a4a70" stroke="#3080b0" stroke-width="1"/>
+    <text x="625" y="95" class="node-label">Input</text>
+    <rect x="690" y="75" width="100" height="32" rx="5" fill="#1a4a70" stroke="#3080b0" stroke-width="1"/>
+    <text x="740" y="95" class="node-label">Slash Cmds</text>
+  </g>
+
+  <!-- Flow arrow 1→2 -->
+  <line x1="480" y1="120" x2="480" y2="145" stroke="#4090c0" stroke-width="2" class="flow-arrow"/>
+  <circle cx="480" cy="133" r="3" fill="#60b0e0" class="data-dot dd1"/>
+
+  <!-- ═══════════ LAYER 2: Agent System ═══════════ -->
+  <g>
+    <rect x="60" y="145" width="840" height="175" rx="8" fill="url(#card-grad)"
+          stroke="#cc7020" stroke-width="1.5" class="wave-rect"/>
+    <text x="80" y="168" class="layer-label">Agent System — Agentic Loop</text>
+
+    <!-- Orchestrator (center, prominent) -->
+    <rect x="385" y="178" width="190" height="42" rx="8" fill="url(#orch-grad)"
+          stroke="#ffaa50" stroke-width="2" class="agent-node an1" filter="url(#glow)"/>
+    <text x="480" y="197" class="node-label" font-size="13">Orchestrator</text>
+    <text x="480" y="210" class="node-sub">Routes &amp; Coordinates</text>
+
+    <!-- Agents in ring around orchestrator -->
+    <!-- Coder -->
+    <rect x="80"  y="238" width="110" height="36" rx="6" fill="url(#agent-grad)"
+          stroke="#40a0e0" stroke-width="1.5" class="agent-node an2"/>
+    <text x="135" y="258" class="node-label">Coder</text>
+    <text x="135" y="269" class="node-sub">Generate &amp; Edit</text>
+
+    <!-- Reviewer -->
+    <rect x="210" y="238" width="110" height="36" rx="6" fill="url(#agent-grad)"
+          stroke="#40a0e0" stroke-width="1.5" class="agent-node an3"/>
+    <text x="265" y="258" class="node-label">Reviewer</text>
+    <text x="265" y="269" class="node-sub">Quality &amp; Security</text>
+
+    <!-- Explorer -->
+    <rect x="340" y="238" width="110" height="36" rx="6" fill="url(#agent-grad)"
+          stroke="#40a0e0" stroke-width="1.5" class="agent-node an4"/>
+    <text x="395" y="258" class="node-label">Explorer</text>
+    <text x="395" y="269" class="node-sub">Map Codebase</text>
+
+    <!-- Planner -->
+    <rect x="470" y="238" width="110" height="36" rx="6" fill="url(#agent-grad)"
+          stroke="#40a0e0" stroke-width="1.5" class="agent-node an5"/>
+    <text x="525" y="258" class="node-label">Planner</text>
+    <text x="525" y="269" class="node-sub">Decompose Tasks</text>
+
+    <!-- Debugger -->
+    <rect x="600" y="238" width="110" height="36" rx="6" fill="url(#agent-grad)"
+          stroke="#40a0e0" stroke-width="1.5" class="agent-node an1"/>
+    <text x="655" y="258" class="node-label">Debugger</text>
+    <text x="655" y="269" class="node-sub">Diagnose Issues</text>
+
+    <!-- Parallel Executor -->
+    <rect x="730" y="238" width="140" height="36" rx="6" fill="url(#agent-grad)"
+          stroke="#40a0e0" stroke-width="1.5" class="agent-node an6"/>
+    <text x="800" y="258" class="node-label">Parallel Executor</text>
+    <text x="800" y="269" class="node-sub">Fan-out / Fan-in</text>
+
+    <!-- Connection lines from Orchestrator to agents -->
+    <line x1="430" y1="220" x2="135" y2="238" stroke="#ff9040" stroke-width="1" opacity="0.5" class="flow-arrow"/>
+    <line x1="450" y1="220" x2="265" y2="238" stroke="#ff9040" stroke-width="1" opacity="0.5" class="flow-arrow"/>
+    <line x1="470" y1="220" x2="395" y2="238" stroke="#ff9040" stroke-width="1" opacity="0.5" class="flow-arrow"/>
+    <line x1="490" y1="220" x2="525" y2="238" stroke="#ff9040" stroke-width="1" opacity="0.5" class="flow-arrow"/>
+    <line x1="520" y1="220" x2="655" y2="238" stroke="#ff9040" stroke-width="1" opacity="0.5" class="flow-arrow"/>
+    <line x1="540" y1="220" x2="800" y2="238" stroke="#ff9040" stroke-width="1" opacity="0.5" class="flow-arrow"/>
+
+    <!-- Dual ledger labels -->
+    <rect x="85" y="290" width="130" height="20" rx="4" fill="#1a3050" stroke="#406080" stroke-width="0.8"/>
+    <text x="150" y="304" class="node-sub" font-size="8.5">Dual-Ledger Tracking</text>
+    <rect x="230" y="290" width="130" height="20" rx="4" fill="#1a3050" stroke="#406080" stroke-width="0.8"/>
+    <text x="295" y="304" class="node-sub" font-size="8.5">Context Compaction</text>
+    <rect x="375" y="290" width="130" height="20" rx="4" fill="#1a3050" stroke="#406080" stroke-width="0.8"/>
+    <text x="440" y="304" class="node-sub" font-size="8.5">Stall Detection</text>
+    <rect x="520" y="290" width="130" height="20" rx="4" fill="#1a3050" stroke="#406080" stroke-width="0.8"/>
+    <text x="585" y="304" class="node-sub" font-size="8.5">Reversibility Check</text>
+  </g>
+
+  <!-- Flow arrow 2→3 -->
+  <line x1="480" y1="320" x2="480" y2="345" stroke="#4090c0" stroke-width="2" class="flow-arrow"/>
+  <circle cx="480" cy="333" r="3" fill="#60b0e0" class="data-dot dd2"/>
+
+  <!-- ═══════════ LAYER 3: Tool System ═══════════ -->
+  <g>
+    <rect x="60" y="345" width="840" height="115" rx="8" fill="url(#card-grad)"
+          stroke="#30805a" stroke-width="1.5" class="wave-rect"/>
+    <text x="80" y="368" class="layer-label">Tool System — 36 Tools</text>
+
+    <!-- Tool category boxes -->
+    <rect x="80"  y="378" width="120" height="65" rx="5" fill="url(#tool-grad)" stroke="#40b070" stroke-width="1"/>
+    <text x="140" y="398" class="node-label">File Ops</text>
+    <text x="140" y="410" class="node-sub">read, write, edit</text>
+    <text x="140" y="420" class="node-sub">search, grep, mkdir</text>
+    <text x="140" y="432" class="node-sub" font-size="7" fill="#80c0a0">7 tools</text>
+
+    <rect x="215" y="378" width="110" height="65" rx="5" fill="url(#tool-grad)" stroke="#40b070" stroke-width="1"/>
+    <text x="270" y="398" class="node-label">Shell</text>
+    <text x="270" y="410" class="node-sub">run_command</text>
+    <text x="270" y="420" class="node-sub">open_file</text>
+    <text x="270" y="432" class="node-sub" font-size="7" fill="#80c0a0">2 tools</text>
+
+    <rect x="340" y="378" width="110" height="65" rx="5" fill="url(#tool-grad)" stroke="#40b070" stroke-width="1"/>
+    <text x="395" y="398" class="node-label">Git</text>
+    <text x="395" y="410" class="node-sub">status, diff, commit</text>
+    <text x="395" y="420" class="node-sub">push, branch, log</text>
+    <text x="395" y="432" class="node-sub" font-size="7" fill="#80c0a0">6 tools</text>
+
+    <rect x="465" y="378" width="110" height="65" rx="5" fill="url(#tool-grad)" stroke="#40b070" stroke-width="1"/>
+    <text x="520" y="398" class="node-label">GitHub</text>
+    <text x="520" y="410" class="node-sub">PRs, Issues, Reviews</text>
+    <text x="520" y="420" class="node-sub">via gh CLI</text>
+    <text x="520" y="432" class="node-sub" font-size="7" fill="#80c0a0">7 tools</text>
+
+    <rect x="590" y="378" width="110" height="65" rx="5" fill="url(#tool-grad)" stroke="#40b070" stroke-width="1"/>
+    <text x="645" y="398" class="node-label">Beads</text>
+    <text x="645" y="410" class="node-sub">create, ready, done</text>
+    <text x="645" y="420" class="node-sub">Git-backed memory</text>
+    <text x="645" y="432" class="node-sub" font-size="7" fill="#80c0a0">8 tools</text>
+
+    <rect x="715" y="378" width="110" height="65" rx="5" fill="url(#tool-grad)" stroke="#40b070" stroke-width="1"/>
+    <text x="770" y="398" class="node-label">Web</text>
+    <text x="770" y="410" class="node-sub">fetch, search</text>
+    <text x="770" y="420" class="node-sub">JSON parsing</text>
+    <text x="770" y="432" class="node-sub" font-size="7" fill="#80c0a0">3 tools</text>
+  </g>
+
+  <!-- Flow arrow 3→4 -->
+  <line x1="480" y1="460" x2="480" y2="485" stroke="#4090c0" stroke-width="2" class="flow-arrow"/>
+  <circle cx="480" cy="473" r="3" fill="#60b0e0" class="data-dot dd3"/>
+
+  <!-- ═══════════ LAYER 4: LLM Integration ═══════════ -->
+  <g>
+    <rect x="60" y="485" width="840" height="70" rx="8" fill="url(#card-grad)"
+          stroke="#8a6030" stroke-width="1.5" class="wave-rect"/>
+    <text x="80" y="508" class="layer-label">LLM Integration — Azure OpenAI Responses API</text>
+
+    <rect x="250" y="515" width="140" height="28" rx="5" fill="url(#llm-grad)" stroke="#c08040" stroke-width="1"/>
+    <text x="320" y="534" class="node-label">GPT Codex 5.2</text>
+
+    <rect x="410" y="515" width="110" height="28" rx="5" fill="url(#llm-grad)" stroke="#c08040" stroke-width="1"/>
+    <text x="465" y="534" class="node-label">Streaming</text>
+
+    <rect x="540" y="515" width="110" height="28" rx="5" fill="url(#llm-grad)" stroke="#c08040" stroke-width="1"/>
+    <text x="595" y="534" class="node-label">Tool Calling</text>
+
+    <rect x="670" y="515" width="130" height="28" rx="5" fill="url(#llm-grad)" stroke="#c08040" stroke-width="1"/>
+    <text x="735" y="534" class="node-label">Context Window</text>
+  </g>
+
+  <!-- Flow arrows 4→externals -->
+  <line x1="280" y1="555" x2="180" y2="590" stroke="#7060a0" stroke-width="2" class="flow-arrow"/>
+  <line x1="480" y1="555" x2="480" y2="590" stroke="#7060a0" stroke-width="2" class="flow-arrow"/>
+  <line x1="680" y1="555" x2="780" y2="590" stroke="#7060a0" stroke-width="2" class="flow-arrow"/>
+  <circle cx="230" cy="573" r="3" fill="#a080d0" class="data-dot dd4"/>
+  <circle cx="480" cy="573" r="3" fill="#a080d0" class="data-dot dd1"/>
+  <circle cx="730" cy="573" r="3" fill="#a080d0" class="data-dot dd3"/>
+
+  <!-- ═══════════ LAYER 5: External Systems ═══════════ -->
+  <g>
+    <rect x="80"  y="590" width="200" height="55" rx="8" fill="url(#ext-grad)"
+          stroke="#8060b0" stroke-width="1.5" class="agent-node an2"/>
+    <text x="180" y="615" class="node-label" font-size="12">File System</text>
+    <text x="180" y="630" class="node-sub">Read / Write / Search</text>
+
+    <rect x="380" y="590" width="200" height="55" rx="8" fill="url(#ext-grad)"
+          stroke="#8060b0" stroke-width="1.5" class="agent-node an4"/>
+    <text x="480" y="615" class="node-label" font-size="12">Git / GitHub</text>
+    <text x="480" y="630" class="node-sub">Version Control &amp; PRs</text>
+
+    <rect x="680" y="590" width="200" height="55" rx="8" fill="url(#ext-grad)"
+          stroke="#8060b0" stroke-width="1.5" class="agent-node an6"/>
+    <text x="780" y="615" class="node-label" font-size="12">Beads Memory</text>
+    <text x="780" y="630" class="node-sub">Git-backed Persistence</text>
+  </g>
+
+  <!-- ═══════════ Nemo swimming across ═══════════ -->
+  <g class="nemo-group" transform="translate(-130, 150)">
+    <g class="nemo-bob">
+      <!-- Nemo body (facing right) -->
+      <ellipse cx="60" cy="18" rx="22" ry="13" fill="#ff7f27" stroke="#cc5500" stroke-width="1.5"/>
+      <!-- White stripes -->
+      <rect x="44" y="6" width="5" height="24" rx="2" fill="white" opacity="0.85"/>
+      <rect x="60" y="7" width="4" height="22" rx="2" fill="white" opacity="0.85"/>
+      <rect x="72" y="8" width="4" height="20" rx="2" fill="white" opacity="0.8"/>
+      <!-- Tail -->
+      <polygon points="36,18 24,8 24,28" fill="#ff9040" stroke="#cc5500" stroke-width="1"/>
+      <!-- Top fin -->
+      <polygon points="55,5 63,0 68,5" fill="#ff8030" stroke="#cc5500" stroke-width="0.8"/>
+      <!-- Eye -->
+      <circle cx="74" cy="15" r="5" fill="white" stroke="#333" stroke-width="1"/>
+      <circle cx="76" cy="14" r="2.5" fill="#111"/>
+      <circle cx="77" cy="13" r="1" fill="white"/>
+      <!-- Mouth -->
+      <path d="M 79 20 Q 82 22 80 24" stroke="#cc5500" stroke-width="1" fill="none"/>
+      <!-- Lucky fin (small) -->
+      <polygon points="70,25 78,31 66,30" fill="#ff8030" stroke="#cc5500" stroke-width="0.8"/>
+      <!-- Tiny bubbles trailing -->
+      <circle cx="20" cy="12" r="2" fill="none" stroke="#80c0e0" stroke-width="0.8" opacity="0.5"/>
+      <circle cx="12" cy="18" r="1.5" fill="none" stroke="#80c0e0" stroke-width="0.6" opacity="0.4"/>
+    </g>
+  </g>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="660" width="960" height="60" fill="#040e20" opacity="0.7"/>
+  <text x="480" y="680" text-anchor="middle" font-size="10" fill="#506880" font-family="monospace">
+    src/cli.ts → src/agent/ → src/tools/ → src/llm/ → src/ui/
+  </text>
+  <text x="480" y="698" text-anchor="middle" font-size="9" fill="#405060" font-family="monospace">
+    Bun · TypeScript · Azure OpenAI · Ink · Commander · Beads
+  </text>
+
+  <!-- Sandy bottom with wave -->
+  <path d="M 0 715 Q 120 708 240 715 Q 360 722 480 715 Q 600 708 720 715 Q 840 722 960 715 L 960 720 L 0 720 Z"
+        fill="#1a1508" opacity="0.4"/>
+</svg>

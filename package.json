@@ -1,14 +1,30 @@
 {
   "name": "sharkbait",
   "version": "1.0.0",
-  "description": "AI-powered coding assistant for the command line. Uses OpenAI Responses API (not Chat). Autonomous agents, parallel code reviews, 33+ tools.",
+  "description": "AI-powered coding assistant for the command line. Uses OpenAI Responses API (not Chat). Autonomous agents, parallel code reviews, 36 tools.",
   "type": "module",
+  "main": "./dist/cli.js",
+  "module": "./dist/cli.js",
+  "exports": {
+    ".": {
+      "import": "./dist/cli.js",
+      "default": "./dist/cli.js"
+    }
+  },
   "bin": {
     "sharkbait": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
   "scripts": {
     "dev": "bun run src/cli.ts",
+    "prebuild": "bun run scripts/sync-version.ts",
     "build": "bun build src/cli.ts --outdir dist --target bun",
+    "build:npm": "bun run scripts/sync-version.ts && bun build src/cli.ts --outdir dist --target node",
     "build:binary": "bun build src/cli.ts --compile --outfile sharkbait",
     "build:all": "bun run scripts/build-all.ts",
     "test": "bun test",
@@ -17,7 +33,15 @@
     "test:llm": "bun run scripts/test-llm-connection.ts",
     "test:agent": "bun run scripts/test-agent-loop.ts",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run typecheck && bun run build:npm",
+    "preversion": "bun run typecheck",
+    "postversion": "bun run scripts/sync-version.ts && git add src/version.ts && git commit --amend --no-edit && git push && git push --tags",
+    "version:patch": "npm version patch",
+    "version:minor": "npm version minor",
+    "version:major": "npm version major",
+    "publish:npm": "npm publish",
+    "publish:bun": "bunx npm publish"
   },
   "dependencies": {
     "@azure/identity": "^4.13.0",
@@ -41,10 +65,19 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "bun": ">=1.0.0"
+    "bun": ">=1.0.0",
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "author": "Shyam Sridhar",
   "license": "MIT",
+  "homepage": "https://github.com/shyamsridhar123/sharkbait#readme",
+  "bugs": {
+    "url": "https://github.com/shyamsridhar123/sharkbait/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/shyamsridhar123/sharkbait.git"
@@ -54,6 +87,10 @@
     "coding-assistant",
     "cli",
     "llm",
-    "azure-openai"
+    "azure-openai",
+    "bun",
+    "typescript",
+    "agent",
+    "openai"
   ]
 }

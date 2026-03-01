@@ -1,468 +1,661 @@
 #!/usr/bin/env python3
 """
 Finding Nemo style animated GIFs for Sharkbait project.
-Creates multiple themed GIFs using PIL drawing primitives.
+Uses real clipart images composited onto rich animated ocean backgrounds.
 """
 
 import math
+import random
 import sys
 sys.path.insert(0, '/tmp/anthropic-skills/skills/slack-gif-creator')
 
 from core.gif_builder import GIFBuilder
-from core.frame_composer import create_gradient_background, create_blank_frame
-from core.easing import interpolate, ease_out_cubic
-from PIL import Image, ImageDraw, ImageFont
+from core.frame_composer import create_gradient_background
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 OUTPUT_DIR = '/home/shyamsridhar/code/sharkbait/sharkbait/public/gifs'
+IMAGE_DIR = '/home/shyamsridhar/code/sharkbait/sharkbait/public/images'
+
+# All source sprites face LEFT. Flip=True makes them face RIGHT.
+# When swimming left-to-right, use flip=True.
+# When swimming right-to-left, use flip=False (default).
 
 
-def draw_clownfish(draw, cx, cy, size, angle=0, flip=False):
-    """Draw a stylized clownfish (Nemo) using PIL primitives."""
-    s = size
-    direction = -1 if flip else 1
-
-    # Body (orange ellipse)
-    body_w = int(s * 1.8)
-    body_h = int(s * 1.0)
-    draw.ellipse(
-        [cx - body_w//2, cy - body_h//2, cx + body_w//2, cy + body_h//2],
-        fill=(255, 127, 39), outline=(200, 80, 10), width=2
-    )
-
-    # White stripes
-    stripe_w = int(s * 0.18)
-    for offset in [-int(s*0.35), int(s*0.15), int(s*0.55)]:
-        sx = cx + offset * direction
-        draw.rectangle(
-            [sx - stripe_w//2, cy - body_h//2 + 2, sx + stripe_w//2, cy + body_h//2 - 2],
-            fill=(255, 255, 255), outline=(220, 220, 220), width=1
-        )
-
-    # Black outlines on stripes
-    for offset in [-int(s*0.35), int(s*0.15), int(s*0.55)]:
-        sx = cx + offset * direction
-        draw.line([(sx - stripe_w//2, cy - body_h//2 + 2), (sx - stripe_w//2, cy + body_h//2 - 2)],
-                  fill=(0, 0, 0), width=2)
-        draw.line([(sx + stripe_w//2, cy - body_h//2 + 2), (sx + stripe_w//2, cy + body_h//2 - 2)],
-                  fill=(0, 0, 0), width=2)
-
-    # Tail fin
-    tail_x = cx - int(s * 0.9) * direction
-    points = [
-        (tail_x, cy),
-        (tail_x - int(s*0.5)*direction, cy - int(s*0.4)),
-        (tail_x - int(s*0.5)*direction, cy + int(s*0.4)),
-    ]
-    draw.polygon(points, fill=(255, 160, 50), outline=(200, 80, 10), width=2)
-
-    # Top fin
-    fin_points = [
-        (cx - int(s*0.2)*direction, cy - body_h//2),
-        (cx + int(s*0.1)*direction, cy - body_h//2 - int(s*0.35)),
-        (cx + int(s*0.3)*direction, cy - body_h//2),
-    ]
-    draw.polygon(fin_points, fill=(255, 140, 30), outline=(200, 80, 10), width=2)
-
-    # Eye
-    eye_x = cx + int(s * 0.5) * direction
-    eye_y = cy - int(s * 0.1)
-    eye_r = int(s * 0.15)
-    draw.ellipse([eye_x - eye_r, eye_y - eye_r, eye_x + eye_r, eye_y + eye_r],
-                 fill=(255, 255, 255), outline=(0, 0, 0), width=2)
-    pupil_r = int(s * 0.07)
-    px = eye_x + int(s * 0.03) * direction
-    draw.ellipse([px - pupil_r, eye_y - pupil_r, px + pupil_r, eye_y + pupil_r],
-                 fill=(0, 0, 0))
-
-    # Lucky fin (Nemo's small fin)
-    lucky_x = cx + int(s * 0.3) * direction
-    lucky_y = cy + int(s * 0.15)
-    lfin_points = [
-        (lucky_x, lucky_y),
-        (lucky_x + int(s*0.25)*direction, lucky_y + int(s*0.2)),
-        (lucky_x - int(s*0.05)*direction, lucky_y + int(s*0.15)),
-    ]
-    draw.polygon(lfin_points, fill=(255, 140, 30), outline=(200, 80, 10), width=1)
+def load_sprite(filename, target_width):
+    """Load a PNG sprite, resize proportionally, return RGBA Image."""
+    img = Image.open(f'{IMAGE_DIR}/{filename}').convert('RGBA')
+    aspect = img.height / img.width
+    target_height = int(target_width * aspect)
+    return img.resize((target_width, target_height), Image.Resampling.LANCZOS)
 
 
-def draw_dory(draw, cx, cy, size, flip=False):
-    """Draw a stylized Dory (blue tang) using PIL primitives."""
-    s = size
-    direction = -1 if flip else 1
-    body_w = int(s * 2.0)
-    body_h = int(s * 1.1)
-
-    # Body (blue)
-    draw.ellipse(
-        [cx - body_w//2, cy - body_h//2, cx + body_w//2, cy + body_h//2],
-        fill=(30, 100, 200), outline=(15, 60, 150), width=2
-    )
-
-    # Yellow tail section
-    tail_x = cx - int(s * 0.6) * direction
-    draw.ellipse(
-        [tail_x - int(s*0.3), cy - int(s*0.35), tail_x + int(s*0.3), cy + int(s*0.35)],
-        fill=(255, 220, 50), outline=(200, 170, 20), width=2
-    )
-
-    # Dark blue/black swatch
-    sw_x = cx - int(s * 0.1) * direction
-    draw.ellipse(
-        [sw_x - int(s*0.4), cy - int(s*0.3), sw_x + int(s*0.15), cy + int(s*0.3)],
-        fill=(10, 40, 100), outline=(5, 25, 80), width=1
-    )
-
-    # Tail fin
-    tail_x2 = cx - int(s * 1.0) * direction
-    points = [
-        (tail_x2, cy),
-        (tail_x2 - int(s*0.45)*direction, cy - int(s*0.35)),
-        (tail_x2 - int(s*0.45)*direction, cy + int(s*0.35)),
-    ]
-    draw.polygon(points, fill=(255, 220, 50), outline=(200, 170, 20), width=2)
-
-    # Eye
-    eye_x = cx + int(s * 0.55) * direction
-    eye_y = cy - int(s * 0.05)
-    eye_r = int(s * 0.14)
-    draw.ellipse([eye_x - eye_r, eye_y - eye_r, eye_x + eye_r, eye_y + eye_r],
-                 fill=(255, 255, 255), outline=(0, 0, 0), width=2)
-    pupil_r = int(s * 0.06)
-    draw.ellipse([eye_x - pupil_r, eye_y - pupil_r, eye_x + pupil_r, eye_y + pupil_r],
-                 fill=(0, 0, 0))
+def paste_sprite(frame, sprite, x, y, flip=False):
+    """Paste an RGBA sprite onto an RGB frame at (x, y) center position."""
+    s = sprite
+    if flip:
+        s = s.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    if frame.mode != 'RGBA':
+        frame = frame.convert('RGBA')
+    px = x - s.width // 2
+    py = y - s.height // 2
+    temp = Image.new('RGBA', frame.size, (0, 0, 0, 0))
+    temp.paste(s, (px, py), s)
+    result = Image.alpha_composite(frame, temp)
+    return result.convert('RGB')
 
 
-def draw_bubbles(draw, bubbles, frame_idx):
-    """Draw floating bubbles."""
+def get_font(size):
+    """Get the best available font."""
+    try:
+        return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
+    except (OSError, IOError):
+        return ImageFont.load_default()
+
+
+# ─── Rich Environment Drawing ────────────────────────────────────────────
+
+
+def draw_caustics(draw, W, H, frame_idx, intensity=0.4):
+    """Draw animated underwater caustic light patterns on the upper portion."""
+    for cx in range(0, W, 6):
+        for cy in range(0, min(H, int(H * 0.5)), 8):
+            noise = math.sin(cx * 0.08 + frame_idx * 0.25) * math.cos(cy * 0.1 + frame_idx * 0.15)
+            noise += math.sin((cx + cy) * 0.05 + frame_idx * 0.3) * 0.5
+            if noise > 0.6:
+                bright = int(noise * 40 * intensity)
+                depth_fade = max(0, 1.0 - cy / (H * 0.5))
+                bright = int(bright * depth_fade)
+                if bright > 3:
+                    draw.ellipse([cx - 2, cy - 2, cx + 3, cy + 3],
+                                 fill=(bright + 10, bright + 20, bright + 40))
+
+
+def draw_light_rays(draw, W, H, frame_idx, count=8, reach=0.7):
+    """Draw volumetric light rays from the surface."""
+    for ray in range(count):
+        rx = int((ray * (W // count) + frame_idx * 5) % (W + 60)) - 30
+        ray_w = random.Random(ray + 100).randint(20, 40)
+        max_y = int(H * reach)
+        for ry in range(0, max_y):
+            ratio = ry / max_y
+            alpha = max(0, int(45 * (1 - ratio * ratio)))
+            if alpha <= 0:
+                break
+            spread = int(ry * 0.08)
+            r = min(255, 15 + alpha)
+            g = min(255, 25 + int(alpha * 1.2))
+            b = min(255, 50 + int(alpha * 1.5))
+            draw.line([(rx - spread, ry), (rx + ray_w + spread, ry)],
+                      fill=(r, g, b), width=1)
+
+
+def draw_bubbles(draw, bubbles, frame_idx, h_mod=480):
+    """Draw shimmering floating bubbles with proper reflections."""
     for bx, by, br, speed in bubbles:
-        y_offset = (frame_idx * speed) % 500
-        by_anim = (by - y_offset) % 500
-        wobble = math.sin(frame_idx * 0.3 + bx * 0.1) * 3
-        draw.ellipse(
-            [int(bx + wobble - br), int(by_anim - br),
-             int(bx + wobble + br), int(by_anim + br)],
-            fill=None, outline=(180, 220, 255), width=2
-        )
-        # Highlight
-        highlight_r = max(1, br // 3)
-        hx = int(bx + wobble - br // 3)
-        hy = int(by_anim - br // 3)
-        draw.ellipse([hx, hy, hx + highlight_r, hy + highlight_r],
-                     fill=(220, 240, 255))
+        y_offset = (frame_idx * speed) % h_mod
+        by_anim = (by - y_offset) % h_mod
+        wobble = math.sin(frame_idx * 0.3 + bx * 0.1) * 5
+        x = int(bx + wobble)
+        y = int(by_anim)
+        # Outer glow
+        draw.ellipse([x - br - 1, y - br - 1, x + br + 1, y + br + 1],
+                     fill=None, outline=(100, 160, 220), width=1)
+        # Main bubble
+        draw.ellipse([x - br, y - br, x + br, y + br],
+                     fill=None, outline=(160, 215, 255), width=2)
+        # Specular highlight
+        hr = max(1, br // 3)
+        hx = x - br // 3
+        hy = y - br // 3
+        draw.ellipse([hx, hy, hx + hr, hy + hr], fill=(220, 240, 255))
+        # Secondary highlight
+        if br > 5:
+            draw.ellipse([x + br // 4, y + br // 4,
+                          x + br // 4 + 2, y + br // 4 + 2],
+                         fill=(200, 230, 250))
+
+
+def draw_coral_cluster(draw, base_x, base_y, seed, scale=1.0):
+    """Draw a rich coral formation at a given position."""
+    rng = random.Random(seed)
+    coral_types = [
+        # (color, shape_type)
+        ((200, 60, 80), 'branch'),
+        ((240, 130, 60), 'fan'),
+        ((180, 50, 160), 'brain'),
+        ((100, 200, 120), 'tube'),
+        ((240, 180, 80), 'fan'),
+        ((220, 80, 120), 'branch'),
+    ]
+    num = rng.randint(2, 4)
+    for _ in range(num):
+        ctype = rng.choice(coral_types)
+        color = ctype[0]
+        shape = ctype[1]
+        ox = rng.randint(-20, 20)
+        oy = rng.randint(-5, 5)
+        cx = base_x + int(ox * scale)
+        cy = base_y + int(oy * scale)
+        s = int(rng.randint(8, 18) * scale)
+
+        if shape == 'branch':
+            for branch in range(rng.randint(3, 6)):
+                angle = rng.uniform(-0.8, 0.8) - math.pi / 2
+                length = rng.randint(int(s * 0.8), int(s * 1.5))
+                ex = cx + int(math.cos(angle) * length)
+                ey = cy + int(math.sin(angle) * length)
+                draw.line([(cx, cy), (ex, ey)], fill=color, width=max(2, s // 5))
+                # Polyp tip
+                tr = max(2, s // 6)
+                draw.ellipse([ex - tr, ey - tr, ex + tr, ey + tr], fill=color)
+        elif shape == 'fan':
+            for a in range(5):
+                angle = -math.pi / 2 + (a - 2) * 0.3
+                for seg in range(3, int(s * 0.8)):
+                    sx_p = cx + int(math.cos(angle) * seg * 1.5)
+                    sy_p = cy + int(math.sin(angle) * seg * 1.5)
+                    draw.ellipse([sx_p - 1, sy_p - 1, sx_p + 1, sy_p + 1], fill=color)
+        elif shape == 'brain':
+            draw.ellipse([cx - s, cy - int(s * 0.7), cx + s, cy + int(s * 0.7)],
+                         fill=color, outline=(color[0]//2, color[1]//2, color[2]//2), width=2)
+            # Ridges
+            for ridge in range(3):
+                ry = cy - int(s * 0.4) + ridge * int(s * 0.4)
+                draw.arc([cx - s + 3, ry - 3, cx + s - 3, ry + 3], 0, 180,
+                         fill=(color[0]//2, color[1]//2, color[2]//2), width=1)
+        elif shape == 'tube':
+            for t_i in range(rng.randint(2, 4)):
+                tx = cx + rng.randint(-10, 10)
+                th = rng.randint(s, s * 2)
+                tw = max(3, s // 3)
+                draw.rectangle([tx - tw, cy - th, tx + tw, cy], fill=color)
+                draw.ellipse([tx - tw - 1, cy - th - tw, tx + tw + 1, cy - th + tw],
+                             fill=(min(255, color[0] + 40), min(255, color[1] + 40), min(255, color[2] + 40)))
+
+
+def draw_anemone(draw, x, y, frame_idx, seed, scale=1.0):
+    """Draw a sea anemone with waving tentacles."""
+    rng = random.Random(seed)
+    base_color = rng.choice([(200, 80, 150), (180, 60, 200), (240, 120, 80), (100, 200, 160)])
+    # Base
+    bw = int(20 * scale)
+    bh = int(10 * scale)
+    draw.ellipse([x - bw, y - bh, x + bw, y + bh], fill=base_color)
+    # Tentacles
+    num_tentacles = rng.randint(8, 14)
+    for t in range(num_tentacles):
+        angle = -math.pi / 2 + (t - num_tentacles / 2) * (math.pi / (num_tentacles + 2))
+        wave = math.sin(frame_idx * 0.2 + t * 0.7 + seed * 0.1) * 0.3
+        angle += wave
+        length = int(rng.randint(15, 30) * scale)
+        segments = 6
+        px, py = x, y
+        for seg in range(segments):
+            seg_wave = math.sin(frame_idx * 0.15 + t * 0.5 + seg * 0.8) * (2 + seg)
+            nx = px + int(math.cos(angle) * (length / segments)) + int(seg_wave * 0.3)
+            ny = py + int(math.sin(angle) * (length / segments))
+            draw.line([(px, py), (nx, ny)], fill=base_color, width=max(1, 3 - seg // 2))
+            px, py = nx, ny
+        # Tip glow
+        tip_color = (min(255, base_color[0] + 60), min(255, base_color[1] + 60), min(255, base_color[2] + 60))
+        draw.ellipse([px - 2, py - 2, px + 2, py + 2], fill=tip_color)
+
+
+def draw_seaweed(draw, W, H, frame_idx, density=55):
+    """Draw rich animated seaweed."""
+    for sx in range(25, W, density):
+        rng = random.Random(sx + 7)
+        num_segs = rng.randint(5, 9)
+        green = rng.randint(90, 150)
+        color_base = (rng.randint(10, 30), green, rng.randint(30, 60))
+        leaf_w_base = rng.randint(5, 9)
+        for j in range(num_segs):
+            seg_y = H - 28 - j * 18
+            wobble = math.sin(frame_idx * 0.12 + sx * 0.025 + j * 0.45) * (5 + j * 2.5)
+            w = max(2, leaf_w_base - j)
+            # Leaf shape
+            draw.ellipse([sx + int(wobble) - w, seg_y - 10,
+                          sx + int(wobble) + w, seg_y + 10],
+                         fill=color_base)
+            # Stem
+            if j < num_segs - 1:
+                next_wobble = math.sin(frame_idx * 0.12 + sx * 0.025 + (j + 1) * 0.45) * (5 + (j + 1) * 2.5)
+                draw.line([(sx + int(wobble), seg_y - 10),
+                           (sx + int(next_wobble), seg_y - 28)],
+                          fill=(color_base[0], max(0, color_base[1] - 20), color_base[2]), width=2)
+
+
+def draw_sandy_bottom(draw, W, H, detail=True):
+    """Draw a detailed sandy ocean floor with ripples."""
+    sand_top = H - 35
+    for y in range(sand_top, H):
+        ratio = (y - sand_top) / 35
+        r = int(195 + ratio * 25)
+        g = int(165 + ratio * 20)
+        b = int(105 + ratio * 15)
+        draw.line([(0, y), (W, y)], fill=(r, g, b))
+
+    if detail:
+        # Sand ripples
+        for ripple in range(0, W, 30):
+            rng = random.Random(ripple + 42)
+            ry = sand_top + rng.randint(5, 20)
+            rw = rng.randint(15, 25)
+            draw.arc([ripple - rw, ry - 3, ripple + rw, ry + 3], 0, 180,
+                     fill=(180, 155, 95), width=1)
+
+        # Gravel / shells
+        rng = random.Random(999)
+        for _ in range(50):
+            gx = rng.randint(0, W)
+            gy = rng.randint(sand_top + 3, H - 3)
+            gr = rng.randint(1, 3)
+            c = rng.randint(155, 210)
+            draw.ellipse([gx - gr, gy - gr, gx + gr, gy + gr], fill=(c, c - 20, c - 40))
+
+        # Tiny starfish / shells
+        rng2 = random.Random(888)
+        for _ in range(4):
+            sx = rng2.randint(20, W - 20)
+            sy = rng2.randint(sand_top + 8, H - 8)
+            sc = rng2.choice([(220, 180, 120), (200, 100, 80), (180, 160, 200)])
+            draw.ellipse([sx - 4, sy - 4, sx + 4, sy + 4], fill=sc)
+            draw.ellipse([sx - 2, sy - 2, sx + 2, sy + 2],
+                         fill=(min(255, sc[0] + 30), min(255, sc[1] + 30), min(255, sc[2] + 30)))
+
+
+def draw_small_fish_school(draw, base_x, base_y, frame_idx, seed, count=6, color=None):
+    """Draw a school of small background fish."""
+    rng = random.Random(seed)
+    if color is None:
+        color = rng.choice([
+            (180, 200, 220), (150, 180, 210), (170, 190, 230),
+            (200, 180, 160), (220, 200, 150),
+        ])
+    for f in range(count):
+        offset_x = rng.randint(-40, 40)
+        offset_y = rng.randint(-20, 20)
+        bob = math.sin(frame_idx * 0.2 + f * 1.2 + seed) * 3
+        fx = base_x + offset_x
+        fy = base_y + offset_y + int(bob)
+        fs = rng.randint(4, 7)
+        # Body
+        draw.ellipse([fx - fs, fy - fs // 2, fx + fs, fy + fs // 2], fill=color)
+        # Tail
+        draw.polygon([(fx + fs, fy), (fx + fs + 4, fy - 3), (fx + fs + 4, fy + 3)], fill=color)
+
+
+def draw_jellyfish(draw, x, y, frame_idx, seed, scale=1.0):
+    """Draw a translucent jellyfish."""
+    rng = random.Random(seed)
+    color = rng.choice([(180, 100, 220), (100, 180, 220), (220, 150, 180), (150, 220, 200)])
+    # Bell
+    bell_w = int(18 * scale)
+    bell_h = int(14 * scale)
+    bob = math.sin(frame_idx * 0.15 + seed) * 4
+    bx = x
+    by = y + int(bob)
+    draw.ellipse([bx - bell_w, by - bell_h, bx + bell_w, by + bell_h // 2],
+                 fill=color, outline=(color[0] - 30, color[1] - 30, color[2] - 30), width=1)
+    # Inner glow
+    draw.ellipse([bx - bell_w + 4, by - bell_h + 4, bx + bell_w - 4, by + bell_h // 2 - 2],
+                 fill=(min(255, color[0] + 40), min(255, color[1] + 40), min(255, color[2] + 40)))
+    # Tentacles
+    for t in range(rng.randint(4, 7)):
+        tx = bx + rng.randint(-int(bell_w * 0.7), int(bell_w * 0.7))
+        ty_start = by + bell_h // 2 - 2
+        length = int(rng.randint(15, 35) * scale)
+        points = []
+        for seg in range(length // 4):
+            wave = math.sin(frame_idx * 0.2 + t * 0.8 + seg * 0.6) * (3 + seg)
+            points.append((tx + int(wave), ty_start + seg * 4))
+        if len(points) >= 2:
+            draw.line(points, fill=color, width=1)
+
+
+# ─── GIF Generators ──────────────────────────────────────────────────────
 
 
 def create_swimming_nemo_gif():
-    """Create a Nemo swimming across ocean background."""
+    """Nemo swimming across a rich ocean scene."""
     print("Creating swimming Nemo GIF...")
     W, H = 480, 480
     builder = GIFBuilder(width=W, height=H, fps=15)
-    num_frames = 30
+    num_frames = 36
 
-    import random
+    # Nemo faces LEFT by default. Swimming L-to-R needs flip=True
+    nemo = load_sprite('clownfish.png', 85)
+
     random.seed(42)
-    bubbles = [(random.randint(20, W-20), random.randint(20, H-20),
-                random.randint(3, 8), random.randint(2, 5)) for _ in range(15)]
+    bubbles = [(random.randint(20, W - 20), random.randint(20, H - 20),
+                random.randint(4, 10), random.randint(2, 6)) for _ in range(18)]
 
     for i in range(num_frames):
         t = i / num_frames
-        frame = create_gradient_background(W, H, (0, 40, 100), (0, 15, 50))
+        frame = create_gradient_background(W, H, (5, 50, 120), (2, 12, 40))
         draw = ImageDraw.Draw(frame)
 
-        # Seaweed at bottom
-        for sx in range(30, W, 60):
-            for j in range(5):
-                seg_y = H - 20 - j * 25
-                wobble = math.sin(i * 0.2 + sx * 0.05 + j * 0.5) * 8
-                draw.ellipse([sx + int(wobble) - 5, seg_y - 12, sx + int(wobble) + 5, seg_y + 12],
-                             fill=(20, 120, 40))
+        # Caustic light patterns
+        draw_caustics(draw, W, H, i, intensity=0.5)
+        draw_light_rays(draw, W, H, i, count=7, reach=0.6)
 
-        # Sandy bottom
-        draw.rectangle([0, H - 25, W, H], fill=(210, 180, 120))
-        for dot_x in range(0, W, 8):
-            draw.ellipse([dot_x, H - 18, dot_x + 3, H - 15], fill=(190, 160, 100))
+        # Background fish schools
+        school_x = int((200 + i * 4) % (W + 60)) - 30
+        draw_small_fish_school(draw, school_x, 100, i, seed=111, count=8)
+        draw_small_fish_school(draw, W - school_x, 200, i, seed=222, count=5)
 
-        draw_bubbles(draw, bubbles, i)
+        # Jellyfish in background
+        draw_jellyfish(draw, 380, 120, i, seed=55, scale=0.7)
+        draw_jellyfish(draw, 80, 180, i, seed=66, scale=0.5)
 
-        # Nemo swimming with sine wave motion
-        nemo_x = int(W * 0.2 + t * W * 0.6)
-        nemo_y = int(H * 0.35 + math.sin(t * math.pi * 4) * 30)
-        draw_clownfish(draw, nemo_x, nemo_y, 35)
+        # Coral on the sea floor
+        draw_coral_cluster(draw, 60, H - 45, seed=10, scale=1.2)
+        draw_coral_cluster(draw, 200, H - 40, seed=20, scale=0.9)
+        draw_coral_cluster(draw, 350, H - 42, seed=30, scale=1.1)
+        draw_coral_cluster(draw, 440, H - 38, seed=40, scale=0.8)
+
+        # Anemones
+        draw_anemone(draw, 130, H - 38, i, seed=50, scale=1.0)
+        draw_anemone(draw, 400, H - 40, i, seed=60, scale=0.8)
+
+        draw_seaweed(draw, W, H, i, density=50)
+        draw_sandy_bottom(draw, W, H)
+        draw_bubbles(draw, bubbles, i, h_mod=H)
+
+        # Nemo: swimming LEFT to RIGHT → flip=True
+        nemo_x = int(W * 0.1 + t * W * 0.8)
+        nemo_y = int(H * 0.38 + math.sin(t * math.pi * 4) * 28)
+        frame = paste_sprite(frame, nemo, nemo_x, nemo_y, flip=True)
 
         builder.add_frame(frame)
 
-    builder.save(f'{OUTPUT_DIR}/nemo-swimming.gif', num_colors=96)
+    builder.save(f'{OUTPUT_DIR}/nemo-swimming.gif', num_colors=164)
 
 
 def create_just_keep_swimming_gif():
-    """Create Dory with 'Just keep swimming' text."""
+    """Dory with 'Just keep swimming' in a rich underwater scene."""
     print("Creating 'Just Keep Swimming' GIF...")
     W, H = 480, 480
     builder = GIFBuilder(width=W, height=H, fps=12)
-    num_frames = 36
+    num_frames = 40
 
-    import random
+    dory = load_sprite('blue-tang.png', 100)
+
     random.seed(99)
-    bubbles = [(random.randint(20, W-20), random.randint(20, H-20),
-                random.randint(3, 8), random.randint(2, 5)) for _ in range(12)]
+    bubbles = [(random.randint(20, W - 20), random.randint(20, H - 20),
+                random.randint(4, 10), random.randint(2, 5)) for _ in range(14)]
 
     for i in range(num_frames):
         t = i / num_frames
-        frame = create_gradient_background(W, H, (10, 50, 130), (5, 20, 60))
+        frame = create_gradient_background(W, H, (6, 45, 130), (2, 12, 45))
         draw = ImageDraw.Draw(frame)
 
-        # Light rays from surface
-        for ray in range(5):
-            ray_x = int((ray * 110 + i * 8) % (W + 100)) - 50
-            points = [
-                (ray_x, 0), (ray_x + 30, 0),
-                (ray_x + 60, H), (ray_x - 30, H)
-            ]
-            # Semi-transparent ray effect with light blue
-            for ry in range(0, H, 2):
-                alpha = max(0, 255 - ry)
-                c = min(255, 40 + alpha // 8)
-                draw.line([(ray_x - int(ry*0.05), ry), (ray_x + 30 + int(ry*0.05), ry)],
-                          fill=(c, c + 10, c + 30), width=1)
+        draw_caustics(draw, W, H, i, intensity=0.35)
+        draw_light_rays(draw, W, H, i, count=6, reach=0.55)
 
-        draw_bubbles(draw, bubbles, i)
+        # Background schools
+        draw_small_fish_school(draw, int(100 + i * 3) % W, 130, i, seed=333, count=7)
 
-        # Dory swimming with gentle bob
-        dory_x = int(W * 0.5 + math.sin(t * math.pi * 2) * 40)
-        dory_y = int(H * 0.45 + math.sin(t * math.pi * 3) * 15)
-        draw_dory(draw, dory_x, dory_y, 40)
+        # Jellyfish
+        draw_jellyfish(draw, 400, 90, i, seed=77, scale=0.6)
+        draw_jellyfish(draw, 60, 250, i, seed=88, scale=0.5)
 
-        # "Just keep swimming" text that pulses
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
-        except (OSError, IOError):
-            font = ImageFont.load_default()
+        draw_bubbles(draw, bubbles, i, h_mod=H)
 
+        # Dory: swimming back and forth. Velocity determines flip direction.
+        # x velocity: cos component of the sine path
+        dory_x = int(W * 0.5 + math.sin(t * math.pi * 2) * 60)
+        dory_y = int(H * 0.38 + math.sin(t * math.pi * 3) * 22)
+        # velocity_x > 0 means moving right → flip=True (since sprite faces left)
+        velocity_x = math.cos(t * math.pi * 2)
+        flip = velocity_x > 0
+
+        frame = paste_sprite(frame, dory, dory_x, dory_y, flip=flip)
+
+        draw = ImageDraw.Draw(frame)
+        font = get_font(26)
         text = "Just keep swimming..."
-        pulse = 1.0 + math.sin(t * math.pi * 4) * 0.1
-        text_y = int(H * 0.82)
         bbox = draw.textbbox((0, 0), text, font=font)
         text_w = bbox[2] - bbox[0]
         text_x = (W - text_w) // 2
+        text_y = int(H * 0.80) + int(math.sin(t * math.pi * 2) * 4)
 
-        # Text shadow
-        draw.text((text_x + 2, text_y + 2), text, fill=(0, 20, 60), font=font)
-        draw.text((text_x, text_y), text, fill=(180, 220, 255), font=font)
+        # Glow effect
+        draw.text((text_x + 1, text_y + 1), text, fill=(0, 20, 60), font=font)
+        draw.text((text_x - 1, text_y - 1), text, fill=(0, 20, 60), font=font)
+        draw.text((text_x, text_y), text, fill=(190, 230, 255), font=font)
 
         builder.add_frame(frame)
 
-    builder.save(f'{OUTPUT_DIR}/just-keep-swimming.gif', num_colors=96)
+    builder.save(f'{OUTPUT_DIR}/just-keep-swimming.gif', num_colors=164)
 
 
 def create_sharkbait_ooh_ha_ha_gif():
-    """Create the iconic 'Sharkbait, ooh ha ha!' scene."""
+    """The iconic 'Sharkbait, ooh ha ha!' initiation scene in the tank."""
     print("Creating 'Sharkbait ooh ha ha' GIF...")
     W, H = 480, 480
     builder = GIFBuilder(width=W, height=H, fps=12)
-    num_frames = 36
+    num_frames = 42
 
-    phrases = [
-        "SHARKBAIT",
-        "OOH HA HA!",
-        "SHARKBAIT",
-        "OOH HA HA!",
-    ]
-
-    import random
-    random.seed(77)
+    nemo = load_sprite('clownfish.png', 60)
+    phrases = ["SHARKBAIT", "OOH HA HA!", "SHARKBAIT", "OOH HA HA!"]
 
     for i in range(num_frames):
         t = i / num_frames
-        # Aquarium tank background (lighter blue, glass effect)
-        frame = create_gradient_background(W, H, (60, 150, 200), (30, 100, 160))
+        frame = create_gradient_background(W, H, (50, 140, 190), (20, 85, 145))
         draw = ImageDraw.Draw(frame)
 
-        # Tank glass edges
-        draw.rectangle([0, 0, W-1, H-1], outline=(150, 200, 230), width=8)
-        draw.rectangle([8, 8, W-9, H-9], outline=(100, 170, 210), width=3)
+        # Tank glass border with refraction effect
+        draw.rectangle([0, 0, W - 1, H - 1], outline=(170, 215, 235), width=10)
+        draw.rectangle([10, 10, W - 11, H - 11], outline=(120, 185, 215), width=4)
+        # Glass corner highlights
+        for corner_y in range(0, 50):
+            alpha = max(0, 60 - corner_y * 2)
+            draw.line([(12, corner_y + 12), (50, corner_y + 12)],
+                      fill=(min(255, 140 + alpha), min(255, 200 + alpha), min(255, 220 + alpha)), width=1)
 
-        # Gravel at bottom
-        draw.rectangle([10, H - 40, W - 10, H - 10], fill=(140, 120, 90))
-        for gx in range(15, W - 15, 6):
-            gy = H - 35 + random.randint(0, 15)
-            gr = random.randint(2, 4)
-            c = random.randint(100, 160)
-            draw.ellipse([gx-gr, gy-gr, gx+gr, gy+gr], fill=(c, c-20, c-40))
-        random.seed(77)  # Reset for consistent gravel each frame
+        # Caustics in tank
+        draw_caustics(draw, W, H, i, intensity=0.25)
 
-        # Small fish (the Tank Gang) arranged in a circle
-        num_fish = 6
+        # Gravel floor with more detail
+        rng = random.Random(77)
+        sand_y = H - 55
+        for y in range(sand_y, H - 14):
+            ratio = (y - sand_y) / (H - 14 - sand_y)
+            draw.line([(14, y), (W - 14, y)],
+                      fill=(int(130 + ratio * 20), int(110 + ratio * 15), int(80 + ratio * 10)))
+        for _ in range(80):
+            gx = rng.randint(18, W - 18)
+            gy = rng.randint(sand_y + 2, H - 18)
+            gr = rng.randint(2, 5)
+            c = rng.randint(90, 160)
+            draw.ellipse([gx - gr, gy - gr, gx + gr, gy + gr], fill=(c, c - 15, c - 35))
+
+        # Tank decorations: coral and plants
+        draw_coral_cluster(draw, 50, sand_y, seed=101, scale=0.9)
+        draw_coral_cluster(draw, W - 50, sand_y, seed=102, scale=0.8)
+        draw_anemone(draw, W // 2 - 80, sand_y, i, seed=103, scale=0.7)
+        draw_anemone(draw, W // 2 + 80, sand_y, i, seed=104, scale=0.7)
+
+        # Bubbles from tank filter
+        tank_bubbles = [(W - 40 + random.Random(b).randint(-5, 5),
+                         H - 60 - b * 50, random.Random(b + 1).randint(2, 5),
+                         random.Random(b + 2).randint(3, 6)) for b in range(6)]
+        draw_bubbles(draw, tank_bubbles, i, h_mod=H)
+
+        # The Tank Gang orbiting in formation
         center_x, center_y = W // 2, H // 2 - 20
-        circle_r = 100
-        for f in range(num_fish):
-            angle = (f / num_fish) * math.pi * 2 + t * math.pi * 2
-            fx = int(center_x + math.cos(angle) * circle_r)
-            fy = int(center_y + math.sin(angle) * circle_r * 0.6)
-
-            # Different colored fish for tank gang
-            colors = [
-                (255, 200, 0),    # Gill (yellow-ish)
-                (200, 50, 200),   # Bloat (purple)
-                (255, 100, 100),  # Peach (pink/red)
-                (100, 255, 100),  # Gurgle (green)
-                (255, 180, 50),   # Bubbles (orange)
-                (100, 200, 255),  # Deb (light blue)
-            ]
-            col = colors[f]
-            fish_s = 15
-            # Simple fish shape
-            body = [fx - fish_s, fy - fish_s//2, fx + fish_s, fy + fish_s//2]
-            draw.ellipse(body, fill=col, outline=(col[0]//2, col[1]//2, col[2]//2), width=2)
-            # Tail
-            direction = 1 if math.cos(angle) > 0 else -1
-            tail_pts = [
-                (fx - fish_s * direction, fy),
-                (fx - fish_s * direction - 8 * direction, fy - 6),
-                (fx - fish_s * direction - 8 * direction, fy + 6),
-            ]
-            draw.polygon(tail_pts, fill=col)
+        gang_colors = [
+            (50, 50, 55),     # Gill (dark, scarred)
+            (180, 160, 60),   # Bubbles (yellow)
+            (240, 90, 110),   # Peach (starfish pink)
+            (80, 200, 100),   # Gurgle (green)
+            (220, 80, 180),   # Deb (purple)
+            (100, 190, 240),  # Jacques (blue/white)
+        ]
+        orbit_r = 110
+        for f_idx in range(6):
+            angle = (f_idx / 6) * math.pi * 2 + t * math.pi * 2
+            fx = int(center_x + math.cos(angle) * orbit_r)
+            fy = int(center_y + math.sin(angle) * orbit_r * 0.5)
+            col = gang_colors[f_idx]
+            # More detailed fish
+            fs = 16
+            draw.ellipse([fx - fs, fy - fs // 2 - 1, fx + fs, fy + fs // 2 + 1],
+                         fill=col, outline=(max(0, col[0] - 40), max(0, col[1] - 40), max(0, col[2] - 40)), width=2)
+            d = 1 if math.cos(angle) > 0 else -1
+            # Fins
+            draw.polygon([(fx - fs * d, fy), (fx - (fs + 10) * d, fy - 8), (fx - (fs + 10) * d, fy + 8)], fill=col)
+            draw.polygon([(fx, fy - fs // 2), (fx + 4 * d, fy - fs // 2 - 6), (fx + 8 * d, fy - fs // 2)],
+                         fill=(min(255, col[0] + 20), min(255, col[1] + 20), min(255, col[2] + 20)))
             # Eye
-            ex = fx + 5 * direction
-            draw.ellipse([ex-2, fy-3, ex+2, fy+1], fill=(255, 255, 255))
-            draw.ellipse([ex-1, fy-2, ex+1, fy], fill=(0, 0, 0))
+            ex = fx + 7 * d
+            draw.ellipse([ex - 4, fy - 4, ex + 4, fy + 2], fill=(255, 255, 255))
+            draw.ellipse([ex - 2 + d, fy - 3, ex + 2 + d, fy + 1], fill=(0, 0, 0))
 
-        # Nemo in the center
-        bob = math.sin(t * math.pi * 6) * 8
-        draw_clownfish(draw, center_x, center_y + int(bob), 25)
+        # Nemo in center, bobbing (faces left by default, no flip needed as he's just floating)
+        bob = math.sin(t * math.pi * 6) * 10
+        frame = paste_sprite(frame, nemo, center_x, center_y + int(bob))
 
-        # Text phrase cycling
+        # Cycling text with glow
+        draw = ImageDraw.Draw(frame)
         phase = int(t * len(phrases)) % len(phrases)
         text = phrases[phase]
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
-        except (OSError, IOError):
-            font = ImageFont.load_default()
-
+        font = get_font(36)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw = bbox[2] - bbox[0]
         tx = (W - tw) // 2
         ty = 30
 
-        # Shaky text effect
-        shake_x = int(math.sin(i * 1.5) * 3)
-        shake_y = int(math.cos(i * 1.8) * 2)
+        shake_x = int(math.sin(i * 1.5) * 5)
+        shake_y = int(math.cos(i * 1.8) * 3)
 
-        draw.text((tx + shake_x + 2, ty + shake_y + 2), text, fill=(0, 30, 80), font=font)
-        draw.text((tx + shake_x, ty + shake_y), text, fill=(255, 255, 200), font=font)
+        # Glow outline
+        for gdx in [-1, 0, 1]:
+            for gdy in [-1, 0, 1]:
+                draw.text((tx + shake_x + gdx + 2, ty + shake_y + gdy + 2), text, fill=(0, 20, 60), font=font)
+        draw.text((tx + shake_x, ty + shake_y), text, fill=(255, 250, 190), font=font)
 
         builder.add_frame(frame)
 
-    builder.save(f'{OUTPUT_DIR}/sharkbait-ooh-ha-ha.gif', num_colors=96)
+    builder.save(f'{OUTPUT_DIR}/sharkbait-ooh-ha-ha.gif', num_colors=164)
 
 
 def create_eac_current_gif():
-    """Create the East Australian Current (EAC) surfing scene."""
+    """East Australian Current with Nemo and turtle surfing the flow."""
     print("Creating EAC Current GIF...")
     W, H = 480, 200
     builder = GIFBuilder(width=W, height=H, fps=15)
-    num_frames = 30
+    num_frames = 36
+
+    # Both face LEFT. For rightward travel in the current, flip=True
+    nemo = load_sprite('clownfish.png', 45)
+    turtle = load_sprite('sea-turtle.png', 100)
+
+    random.seed(22)
+    bubbles = [(random.randint(20, W - 20), random.randint(10, H - 10),
+                random.randint(3, 7), random.randint(3, 6)) for _ in range(10)]
 
     for i in range(num_frames):
         t = i / num_frames
-        frame = create_gradient_background(W, H, (0, 80, 160), (0, 40, 100))
+        frame = create_gradient_background(W, H, (3, 65, 150), (1, 25, 80))
         draw = ImageDraw.Draw(frame)
 
-        # Flowing current lines
-        for cy in range(0, H, 20):
+        # Dense current flow lines with varying intensity
+        for cy in range(0, H, 12):
             points = []
-            for cx_pt in range(0, W + 20, 10):
-                wave = math.sin((cx_pt + i * 15) * 0.02 + cy * 0.05) * 8
+            for cx_pt in range(0, W + 15, 6):
+                wave = (math.sin((cx_pt + i * 20) * 0.018 + cy * 0.04) * 5 +
+                        math.sin((cx_pt + i * 12) * 0.03 + cy * 0.02) * 3)
                 points.append((cx_pt, cy + int(wave)))
             if len(points) >= 2:
-                draw.line(points, fill=(40, 120, 200), width=1)
+                intensity = int(30 + abs(math.sin(cy * 0.05)) * 25)
+                draw.line(points, fill=(intensity, intensity + 40, intensity + 80), width=1)
 
-        # Speed lines
-        for sl in range(8):
-            sy = 30 + sl * 20
-            sx_start = int((i * 20 + sl * 60) % (W + 100)) - 50
-            draw.line([(sx_start, sy), (sx_start + 40, sy)],
-                      fill=(100, 180, 240), width=2)
+        # Speed streaks (many, varied)
+        for sl in range(15):
+            rng = random.Random(sl + 500)
+            sy = rng.randint(10, H - 10)
+            sx_start = int((i * 22 + sl * 35) % (W + 100)) - 50
+            length = rng.randint(25, 70)
+            alpha = rng.randint(60, 140)
+            draw.line([(sx_start, sy), (sx_start + length, sy)],
+                      fill=(alpha, alpha + 50, alpha + 70), width=rng.randint(1, 3))
 
-        # Turtle (Crush) - simple version
-        turtle_x = int(W * 0.3 + math.sin(t * math.pi * 2) * 20)
-        turtle_y = int(H * 0.45 + math.sin(t * math.pi * 3) * 10)
-        # Shell
-        shell_w, shell_h = 35, 25
-        draw.ellipse([turtle_x - shell_w, turtle_y - shell_h,
-                      turtle_x + shell_w, turtle_y + shell_h],
-                     fill=(50, 130, 60), outline=(30, 90, 40), width=3)
-        # Shell pattern
-        draw.ellipse([turtle_x - shell_w + 8, turtle_y - shell_h + 8,
-                      turtle_x + shell_w - 8, turtle_y + shell_h - 8],
-                     fill=None, outline=(40, 110, 50), width=2)
-        # Head
-        head_x = turtle_x + 30
-        draw.ellipse([head_x - 8, turtle_y - 8, head_x + 8, turtle_y + 8],
-                     fill=(80, 160, 80), outline=(50, 120, 50), width=2)
-        # Eye
-        draw.ellipse([head_x + 2, turtle_y - 4, head_x + 6, turtle_y],
-                     fill=(255, 255, 255))
-        draw.ellipse([head_x + 3, turtle_y - 3, head_x + 5, turtle_y - 1],
-                     fill=(0, 0, 0))
-        # Flippers
-        for fy_off in [-1, 1]:
-            flipper_pts = [
-                (turtle_x - 15, turtle_y + 15 * fy_off),
-                (turtle_x - 30, turtle_y + 25 * fy_off + int(math.sin(t * math.pi * 6) * 5)),
-                (turtle_x - 5, turtle_y + 20 * fy_off),
-            ]
-            draw.polygon(flipper_pts, fill=(70, 150, 70), outline=(40, 100, 40), width=2)
+        # Small background fish being swept along
+        for sf in range(4):
+            rng = random.Random(sf + 300)
+            sfx = int((i * 15 + sf * 130) % (W + 80)) - 40
+            sfy = rng.randint(20, H - 20)
+            sfc = (rng.randint(120, 200), rng.randint(150, 220), rng.randint(180, 240))
+            draw.ellipse([sfx - 4, sfy - 2, sfx + 4, sfy + 2], fill=sfc)
+            draw.polygon([(sfx + 4, sfy), (sfx + 8, sfy - 2), (sfx + 8, sfy + 2)], fill=sfc)
 
-        # Nemo riding the current ahead
-        nemo_x = int(W * 0.65 + math.sin(t * math.pi * 4) * 15)
-        nemo_y = int(H * 0.4 + math.cos(t * math.pi * 3) * 10)
-        draw_clownfish(draw, nemo_x, nemo_y, 18)
+        draw_bubbles(draw, bubbles, i, h_mod=H)
 
-        # "Righteous!" text
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
-        except (OSError, IOError):
-            font = ImageFont.load_default()
-        draw.text((W - 130, 15), "Righteous!", fill=(150, 255, 150), font=font)
+        # Turtle: riding the current rightward → flip=True
+        turtle_x = int(W * 0.30 + math.sin(t * math.pi * 2) * 18)
+        turtle_y = int(H * 0.50 + math.sin(t * math.pi * 3) * 10)
+        frame = paste_sprite(frame, turtle, turtle_x, turtle_y, flip=True)
+
+        # Nemo: ahead of turtle, rightward → flip=True
+        nemo_x = int(W * 0.68 + math.sin(t * math.pi * 4) * 14)
+        nemo_y = int(H * 0.36 + math.cos(t * math.pi * 3) * 10)
+        frame = paste_sprite(frame, nemo, nemo_x, nemo_y, flip=True)
+
+        # "Righteous!" text with glow
+        draw = ImageDraw.Draw(frame)
+        font = get_font(20)
+        wobble = int(math.sin(t * math.pi * 4) * 3)
+        tx = W - 150
+        ty = 12 + wobble
+        for gdx in [-1, 0, 1]:
+            for gdy in [-1, 0, 1]:
+                draw.text((tx + gdx, ty + gdy), "Righteous!", fill=(0, 30, 70), font=font)
+        draw.text((tx, ty), "Righteous!", fill=(130, 255, 130), font=font)
 
         builder.add_frame(frame)
 
-    builder.save(f'{OUTPUT_DIR}/eac-current.gif', num_colors=96)
+    builder.save(f'{OUTPUT_DIR}/eac-current.gif', num_colors=164)
 
 
 def create_ocean_divider_gif():
-    """Create a simple animated ocean wave divider for the README."""
+    """Animated ocean wave divider for README."""
     print("Creating ocean divider GIF...")
     W, H = 800, 40
     builder = GIFBuilder(width=W, height=H, fps=12)
     num_frames = 24
 
     for i in range(num_frames):
-        t = i / num_frames
-        frame = Image.new('RGB', (W, H), (13, 17, 23))  # GitHub dark bg
+        frame = Image.new('RGB', (W, H), (13, 17, 23))
         draw = ImageDraw.Draw(frame)
 
-        # Animated wave line
-        points = []
-        for x in range(0, W + 5, 3):
-            y = H // 2 + int(math.sin((x + i * 12) * 0.03) * 8 +
-                              math.sin((x + i * 8) * 0.05) * 4)
-            points.append((x, y))
+        # Multi-layer waves
+        for layer, (color, amp, freq, speed) in enumerate([
+            ((15, 50, 110), 6, 0.04, 8),
+            ((25, 80, 170), 8, 0.03, 12),
+            ((40, 110, 210), 5, 0.05, 10),
+        ]):
+            points = []
+            for x in range(0, W + 5, 3):
+                y = H // 2 + int(math.sin((x + i * speed) * freq) * amp +
+                                  math.sin((x + i * (speed * 0.7)) * freq * 1.5) * (amp * 0.4))
+                points.append((x, y))
+            if len(points) >= 2:
+                draw.line(points, fill=color, width=2 if layer == 1 else 1)
 
-        if len(points) >= 2:
-            draw.line(points, fill=(30, 100, 200), width=3)
-
-        # Sparkle dots on wave
-        for s in range(6):
-            sx = int((s * 140 + i * 20) % W)
-            sy_wave = H // 2 + int(math.sin((sx + i * 12) * 0.03) * 8 +
-                                    math.sin((sx + i * 8) * 0.05) * 4)
+        # Sparkle dots
+        for s in range(8):
+            sx = int((s * 105 + i * 18) % W)
+            sy = H // 2 + int(math.sin((sx + i * 12) * 0.03) * 8 +
+                               math.sin((sx + i * 8) * 0.05) * 4)
             brightness = int(180 + math.sin(i * 0.5 + s) * 75)
-            draw.ellipse([sx - 2, sy_wave - 2, sx + 2, sy_wave + 2],
+            draw.ellipse([sx - 2, sy - 2, sx + 2, sy + 2],
                          fill=(brightness, brightness, 255))
 
         builder.add_frame(frame)
 
-    builder.save(f'{OUTPUT_DIR}/ocean-divider.gif', num_colors=32)
+    builder.save(f'{OUTPUT_DIR}/ocean-divider.gif', num_colors=48)
 
 
 if __name__ == '__main__':
