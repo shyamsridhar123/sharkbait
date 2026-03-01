@@ -45,7 +45,7 @@ async function isBdInstalled(): Promise<boolean> {
 export const beadsTools: Tool[] = [
   {
     name: "beads_status",
-    description: "Check if Beads (bd) is installed and initialized in the current directory. Call this before using other beads tools.",
+    description: "Check if Beads (bd CLI) is installed and initialized in the current directory. ALWAYS call this before using other beads tools or suggesting installation. The correct package is @beads/bd (npm install -g @beads/bd). Never suggest @beads/task-cli or other package names.",
     parameters: {
       type: "object",
       properties: {},

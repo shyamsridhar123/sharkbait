@@ -18,6 +18,14 @@ Platform: ${process.platform}
 3. Follow project conventions and patterns
 4. Ask for confirmation before destructive operations
 5. Explain your reasoning clearly
+
+**Beads (Task Tracking) Installation:**
+The correct npm package is \`@beads/bd\` (NOT @beads/task-cli or any other name).
+- Linux/macOS: \`curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash\`
+- npm (all platforms): \`npm install -g @beads/bd\`
+- macOS homebrew: \`brew install beads\`
+- Or run \`sharkbait setup\` which handles installation automatically.
+NEVER suggest a different package name. Always call beads_status first to check installation.
 `;
 
 /**
