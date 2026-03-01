@@ -9,20 +9,27 @@ import { existsSync } from "fs";
 import { execSync } from "child_process";
 import { exec } from "../utils/runtime";
 
-// Find bd executable - check common locations
+// Find bd executable - check common locations, prefer whichever actually works
 function getBdPath(): string {
-  const paths: string[] = [
-    "bd", // In PATH
-    join(homedir(), "AppData", "Local", "beads", "bd.exe"), // Windows npm install location
+  // First, check if "bd" is on PATH (works regardless of install method)
+  try {
+    execSync("bd --version", { stdio: ["ignore", "ignore", "ignore"] });
+    return "bd";
+  } catch {}
+
+  // Fall back to known install locations
+  const fallbacks: string[] = [
+    join(homedir(), "AppData", "Local", "beads", "bd.exe"), // Windows direct download
     join(homedir(), ".local", "bin", "bd"), // Linux/Mac user install
     "/usr/local/bin/bd", // Mac homebrew
   ];
-  
-  // For now, prefer the explicit path on Windows if it exists
-  if (process.platform === "win32") {
-    return paths[1]!; // Windows path
+
+  for (const p of fallbacks) {
+    if (existsSync(p)) return p;
   }
-  return paths[0]!; // Default to PATH
+
+  // Default to "bd" and let it fail with a clear error at call time
+  return "bd";
 }
 
 const BD_PATH = getBdPath();
