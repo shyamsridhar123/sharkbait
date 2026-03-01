@@ -17,8 +17,12 @@ export interface ChatOptions {
 export async function startChat(options: ChatOptions = {}): Promise<void> {
   // Change to working directory if specified
   const workingDir = getWorkingDir(options.workingDir);
-  if (workingDir !== process.cwd()) {
-    process.chdir(workingDir);
+  try {
+    if (workingDir !== process.cwd()) {
+      process.chdir(workingDir);
+    }
+  } catch {
+    // Directory doesn't exist (e.g. Linux path on Windows) — stay in cwd
   }
 
   const { waitUntilExit } = render(

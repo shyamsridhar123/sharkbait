@@ -180,11 +180,12 @@ export function loadConfig(): Config {
  */
 export function getWorkingDir(cliOption?: string): string {
   if (cliOption) {
-    return cliOption;
+    if (existsSync(cliOption)) return cliOption;
+    return process.cwd();
   }
 
   const config = loadConfig();
-  if (config.paths.defaultWorkingDir) {
+  if (config.paths.defaultWorkingDir && existsSync(config.paths.defaultWorkingDir)) {
     return config.paths.defaultWorkingDir;
   }
 
