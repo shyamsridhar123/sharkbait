@@ -1,6 +1,6 @@
 {
   "name": "sharkbait",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered coding assistant for the command line. Uses OpenAI Responses API (not Chat). Autonomous agents, parallel code reviews, 36 tools.",
   "type": "module",
   "main": "./dist/cli.js",
@@ -24,7 +24,7 @@
     "dev": "bun run src/cli.ts",
     "prebuild": "bun run scripts/sync-version.ts",
     "build": "bun build src/cli.ts --outdir dist --target bun",
-    "build:npm": "bun run scripts/sync-version.ts && bun build src/cli.ts --outdir dist --target node",
+    "build:npm": "bun run scripts/sync-version.ts && bun build src/cli.ts --outdir dist --target node && sed -i '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' dist/cli.js",
     "build:binary": "bun build src/cli.ts --compile --outfile sharkbait",
     "build:all": "bun run scripts/build-all.ts",
     "test": "bun test",
