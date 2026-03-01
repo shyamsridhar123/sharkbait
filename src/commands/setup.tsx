@@ -57,6 +57,7 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
   const [saving, setSaving] = useState(false);
   const [beadsInstallStatus, setBeadsInstallStatus] = useState<"pending" | "installing" | "installed" | "skipped" | "failed">("pending");
   const [beadsInstallError, setBeadsInstallError] = useState<string | null>(null);
+  const [beadsVersion, setBeadsVersion] = useState<string | null>(null);
 
   // Load existing config on mount
   useEffect(() => {
@@ -298,22 +299,44 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
 
       // Install Beads (bd CLI) if enabled
       if (state.enableBeads) {
-        let bdAvailable = false;
+        let bdVersion: string | null = null;
         try {
-          execSync("bd --version", { stdio: "ignore" });
-          bdAvailable = true;
+          bdVersion = execSync("bd --version", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
         } catch {}
 
-        if (!bdAvailable) {
+        if (!bdVersion) {
           setBeadsInstallStatus("installing");
           try {
-            execSync("npm install -g @beads/bd", { stdio: "ignore", timeout: 60000 });
-            setBeadsInstallStatus("installed");
+            // On Linux/macOS, use the official install script (installs native binary)
+            // On Windows, use npm (the install script is bash-only)
+            if (process.platform === "win32") {
+              execSync("npm install -g @beads/bd", { stdio: "ignore", timeout: 120000 });
+            } else {
+              try {
+                execSync(
+                  "curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash",
+                  { stdio: "ignore", timeout: 120000 }
+                );
+              } catch {
+                // Fallback to npm if curl/install script fails
+                execSync("npm install -g @beads/bd", { stdio: "ignore", timeout: 120000 });
+              }
+            }
+            // Verify installation
+            bdVersion = execSync("bd --version", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+            if (bdVersion) {
+              setBeadsVersion(bdVersion);
+              setBeadsInstallStatus("installed");
+            } else {
+              setBeadsInstallStatus("failed");
+              setBeadsInstallError("bd installed but not found in PATH");
+            }
           } catch (installErr) {
             setBeadsInstallStatus("failed");
             setBeadsInstallError(installErr instanceof Error ? installErr.message : String(installErr));
           }
         } else {
+          setBeadsVersion(bdVersion);
           setBeadsInstallStatus("skipped");
         }
       } else {
@@ -582,17 +605,19 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
           {state.enableBeads && (
             <Box marginTop={1} flexDirection="column">
               {beadsInstallStatus === "installed" && (
-                <Text color={colors.success}>{icons.success} Beads (bd) installed successfully</Text>
+                <Text color={colors.success}>{icons.success} Beads (bd) installed{beadsVersion ? ` — ${beadsVersion}` : ""}</Text>
               )}
               {beadsInstallStatus === "skipped" && (
-                <Text color={colors.textMuted}>{icons.success} Beads (bd) already installed</Text>
+                <Text color={colors.textMuted}>{icons.success} Beads (bd) already installed{beadsVersion ? ` — ${beadsVersion}` : ""}</Text>
               )}
               {beadsInstallStatus === "failed" && (
                 <>
                   <Text color={colors.warning}>⚠ Beads (bd) install failed. Install manually:</Text>
-                  <Text color={colors.text}>  npm install -g @beads/bd</Text>
+                  <Text color={colors.text}>  curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash</Text>
+                  <Text color={colors.textDim}>  Or: npm install -g @beads/bd</Text>
+                  <Text color={colors.textDim}>  Or: brew install beads</Text>
                   {beadsInstallError && (
-                    <Text color={colors.textDim}>  {beadsInstallError}</Text>
+                    <Text color={colors.textDim}>  Error: {beadsInstallError}</Text>
                   )}
                 </>
               )}
