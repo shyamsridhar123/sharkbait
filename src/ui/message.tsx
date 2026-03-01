@@ -3,7 +3,7 @@
  * Now with syntax highlighting for code blocks
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { colors, icons } from "./theme";
 import { HighlightedContent, parseCodeBlocks } from "./syntax-highlight";
@@ -15,7 +15,7 @@ interface MessageViewProps {
   enableHighlighting?: boolean;
 }
 
-export function MessageView({ 
+export const MessageView = memo(function MessageView({ 
   role, 
   content, 
   timestamp,
@@ -71,4 +71,4 @@ export function MessageView({
       </Box>
     </Box>
   );
-}
+});

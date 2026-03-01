@@ -114,24 +114,39 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
   const abortControllerRef = useRef<AbortController | null>(null);
   // Throttle streaming output updates to reduce re-renders
   const pendingOutputRef = useRef<string>("");
+  const pendingTokensRef = useRef<number>(0);
+  const pendingCostRef = useRef<number>(0);
   const outputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { exit } = useApp();
 
   const workingDir = currentDir;
 
-  // Flush pending streaming output to state
+  // Flush pending streaming output, tokens, and cost to state in a single batch
   const flushOutput = useCallback(() => {
-    if (pendingOutputRef.current) {
-      setCurrentOutput(pendingOutputRef.current);
+    const output = pendingOutputRef.current;
+    const tokens = pendingTokensRef.current;
+    const cost = pendingCostRef.current;
+    if (output) setCurrentOutput(output);
+    if (tokens > 0) {
+      setTokenCount(prev => prev + tokens);
+      pendingTokensRef.current = 0;
+    }
+    if (cost > 0) {
+      setSessionCost(prev => prev + cost);
+      pendingCostRef.current = 0;
     }
     outputTimerRef.current = null;
   }, []);
 
-  // Throttled setter: accumulates in ref, flushes every 50ms
-  const throttledSetOutput = useCallback((content: string) => {
+  // Throttled setter: accumulates output, tokens, and cost in refs, flushes every 80ms
+  const throttledSetOutput = useCallback((content: string, chunkTokens?: number) => {
     pendingOutputRef.current = content;
+    if (chunkTokens && chunkTokens > 0) {
+      pendingTokensRef.current += chunkTokens;
+      pendingCostRef.current += chunkTokens * 0.00003;
+    }
     if (!outputTimerRef.current) {
-      outputTimerRef.current = setTimeout(flushOutput, 50);
+      outputTimerRef.current = setTimeout(flushOutput, 80);
     }
   }, [flushOutput]);
 
@@ -337,12 +352,8 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
         switch (event.type) {
           case "text":
             assistantContent += event.content;
-            throttledSetOutput(assistantContent);
-            // Track output tokens
             const chunkTokens = estimateTokens(event.content);
-            setTokenCount(prev => prev + chunkTokens);
-            // Approximate cost: $0.01/1K input, $0.03/1K output
-            setSessionCost(prev => prev + (chunkTokens * 0.00003));
+            throttledSetOutput(assistantContent, chunkTokens);
             break;
             
           case "agent_start":
@@ -465,6 +476,15 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             if (outputTimerRef.current) {
               clearTimeout(outputTimerRef.current);
               outputTimerRef.current = null;
+            }
+            // Flush pending tokens/cost
+            if (pendingTokensRef.current > 0) {
+              setTokenCount(prev => prev + pendingTokensRef.current);
+              pendingTokensRef.current = 0;
+            }
+            if (pendingCostRef.current > 0) {
+              setSessionCost(prev => prev + pendingCostRef.current);
+              pendingCostRef.current = 0;
             }
             pendingOutputRef.current = "";
             // Only add message if there's actual content

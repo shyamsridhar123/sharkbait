@@ -2,9 +2,8 @@
  * Tool Call View Component - Claude Code inspired tool execution display
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
-import { Spinner } from "./spinner";
 import { colors, icons, box } from "./theme";
 
 interface ToolCallViewProps {
@@ -15,7 +14,7 @@ interface ToolCallViewProps {
   duration?: number;
 }
 
-export function ToolCallView({ 
+export const ToolCallView = memo(function ToolCallView({ 
   name, 
   status, 
   result, 
@@ -23,7 +22,7 @@ export function ToolCallView({
   duration 
 }: ToolCallViewProps): React.JSX.Element {
   const statusConfig = {
-    running: { icon: icons.tool, color: colors.primary },
+    running: { icon: "⟳", color: colors.primary },
     success: { icon: icons.success, color: colors.success },
     error: { icon: icons.error, color: colors.error },
   };
@@ -42,16 +41,13 @@ export function ToolCallView({
     >
       {/* Tool header */}
       <Box>
-        {status === "running" ? (
-          <Spinner text={name} variant="dots" />
-        ) : (
-          <>
-            <Text color={config.color}>{config.icon} </Text>
-            <Text bold color={colors.text}>{name}</Text>
-            {durationText && (
-              <Text color={colors.textDim}> ({durationText})</Text>
-            )}
-          </>
+        <Text color={config.color}>{config.icon} </Text>
+        <Text bold color={colors.text}>{name}</Text>
+        {status === "running" && (
+          <Text color={colors.textDim}> ...</Text>
+        )}
+        {durationText && (
+          <Text color={colors.textDim}> ({durationText})</Text>
         )}
       </Box>
       
@@ -74,4 +70,4 @@ export function ToolCallView({
       )}
     </Box>
   );
-}
+});

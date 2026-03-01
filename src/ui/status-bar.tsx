@@ -2,7 +2,7 @@
  * Status Bar Component - Shows current session status
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { colors, icons } from "./theme";
 
@@ -14,7 +14,7 @@ interface StatusBarProps {
   activeTask?: { id: string; title?: string } | null;
 }
 
-export function StatusBar({ 
+export const StatusBar = memo(function StatusBar({ 
   model, 
   tokens = 0, 
   cost = 0,
@@ -77,4 +77,4 @@ export function StatusBar({
       </Box>
     </Box>
   );
-}
+});
