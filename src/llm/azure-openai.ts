@@ -1,16 +1,25 @@
 /**
  * Azure OpenAI Client - Wrapper for Azure OpenAI Responses API with streaming support
+ *
+ * Authentication strategy (in order):
+ * 1. If AZURE_OPENAI_API_KEY is set → use API key auth (legacy, backward compat)
+ * 2. Otherwise → use Azure Identity (DefaultAzureCredential)
+ *    - Supports: managed identity, Azure CLI, VS Code, environment creds
+ *    - Token refresh/caching handled by @azure/identity internally
  */
 
 import { AzureOpenAI } from "openai";
+import { DefaultAzureCredential } from "@azure/identity";
 import type { ChatChunk, ToolDefinition, Message } from "./types";
 import { log } from "../utils/logger";
 import { LLMError } from "../utils/errors";
 import { withRetry } from "./retry";
 
+const AZURE_COGNITIVE_SCOPE = "https://cognitiveservices.azure.com/.default";
+
 export interface LLMConfig {
   endpoint: string;
-  apiKey: string;
+  apiKey?: string;           // Optional — when absent, Azure Identity is used
   deployment: string;
   apiVersion: string;
 }
@@ -18,49 +27,70 @@ export interface LLMConfig {
 export class AzureOpenAIClient {
   private client: AzureOpenAI;
   private deployment: string;
+  private authMethod: "api-key" | "azure-identity";
 
   constructor(config: LLMConfig) {
-    if (!config.endpoint || !config.apiKey) {
-      throw new LLMError("Azure OpenAI endpoint and API key are required");
+    if (!config.endpoint) {
+      throw new LLMError("Azure OpenAI endpoint is required");
     }
 
-    this.client = new AzureOpenAI({
-      endpoint: config.endpoint,
-      apiKey: config.apiKey,
-      apiVersion: config.apiVersion,
-    });
+    if (config.apiKey) {
+      this.client = new AzureOpenAI({
+        endpoint: config.endpoint,
+        apiKey: config.apiKey,
+        apiVersion: config.apiVersion,
+      });
+      this.authMethod = "api-key";
+      log.info("Azure OpenAI client initialized with API key auth");
+    } else {
+      const credential = new DefaultAzureCredential();
+      const tokenProvider = async (): Promise<string> => {
+        const tokenResponse = await credential.getToken(AZURE_COGNITIVE_SCOPE);
+        return tokenResponse.token;
+      };
+
+      this.client = new AzureOpenAI({
+        endpoint: config.endpoint,
+        azureADTokenProvider: tokenProvider,
+        apiVersion: config.apiVersion,
+      });
+      this.authMethod = "azure-identity";
+      log.info("Azure OpenAI client initialized with Azure Identity (DefaultAzureCredential)");
+    }
+
     this.deployment = config.deployment;
+  }
+
+  getAuthMethod(): "api-key" | "azure-identity" {
+    return this.authMethod;
   }
 
   async *chat(
     messages: Message[],
     tools?: ToolDefinition[]
   ): AsyncGenerator<ChatChunk> {
-    // Extract system message for instructions
     const systemMessages = messages.filter(m => m.role === "system");
     const nonSystemMessages = messages.filter(m => m.role !== "system");
     const instructions = systemMessages.map(m => m.content).join("\n\n") || undefined;
-    
-    // Convert messages to Responses API input format
+
     const input = this.convertMessagesToInput(nonSystemMessages);
 
-    // Use withRetry to create the stream with automatic retry logic
-    // Note: We wrap the stream creation, not the iteration
+    // Use withRetry for stream creation. Cast through `any` to handle
+    // OpenAI SDK Responses-API type strictness (input/tool shapes).
     const stream = await withRetry(
       async () => {
-        // Build tools config for Responses API
         const toolsConfig = tools ? tools.map(t => ({
           type: "function" as const,
           name: t.name,
           description: t.description,
           parameters: t.parameters as Record<string, unknown>,
+          strict: false,
         })) : undefined;
-        
-        // Use the Responses API with streaming
-        return await this.client.responses.create({
+
+        return await (this.client.responses as any).create({
           model: this.deployment,
-          input: input,
-          instructions: instructions,
+          input,
+          instructions,
           tools: toolsConfig,
           stream: true,
         });
@@ -71,7 +101,7 @@ export class AzureOpenAIClient {
         maxDelay: 60000,
         onRetry: (error, attempt, delay) => {
           const message = error instanceof Error ? error.message : String(error);
-          log.warn(`LLM request failed: ${message}. Retry attempt ${attempt}/3 after ${delay}ms`);
+          log.warn(`LLM request failed: ${message}. Retry ${attempt}/3 after ${delay}ms`);
         },
       }
     );
@@ -79,48 +109,40 @@ export class AzureOpenAIClient {
     let currentToolCallId = "";
     let currentToolCallName = "";
     let currentToolCallArgs = "";
-    let streamedTextLength = 0; // Track how much text we've already streamed
+    let streamedTextLength = 0;
 
     try {
-      for await (const event of stream) {
-        // Debug logging for all events
-        log.debug(`LLM event: ${event.type}`, event);
-        
-        // Handle different event types from Responses API
+      // Cast to AsyncIterable<any> — Responses API streaming events
+      // don't have stable TS types across openai SDK versions.
+      for await (const event of stream as AsyncIterable<any>) {
+        log.debug(`LLM event: ${event.type}`);
+
         switch (event.type) {
-          case "response.output_text.delta":
-          case "response.content_part.delta":
-          case "response.text.delta":
-            // Handle various text delta event types
-            const textDelta = (event as any).delta || (event as any).text || "";
+          case "response.output_text.delta": {
+            const textDelta: string = event.delta || event.text || "";
             if (textDelta) {
               streamedTextLength += textDelta.length;
-              yield {
-                content: textDelta,
-                toolCalls: undefined,
-                finishReason: undefined,
-              };
+              yield { content: textDelta, toolCalls: undefined, finishReason: null };
             }
             break;
+          }
 
           case "response.function_call_arguments.delta":
-            // Accumulate function call arguments
-            currentToolCallArgs += (event as any).delta || "";
+            currentToolCallArgs += event.delta || "";
             break;
 
-          case "response.output_item.added":
-            // Track new function call
-            const item = (event as any).item;
+          case "response.output_item.added": {
+            const item = event.item;
             if (item?.type === "function_call") {
               currentToolCallId = item.call_id || "";
               currentToolCallName = item.name || "";
               currentToolCallArgs = "";
             }
             break;
+          }
 
-          case "response.output_item.done":
-            // Function call completed
-            const doneItem = (event as any).item;
+          case "response.output_item.done": {
+            const doneItem = event.item;
             if (doneItem?.type === "function_call" && currentToolCallName) {
               yield {
                 content: "",
@@ -140,34 +162,26 @@ export class AzureOpenAIClient {
               currentToolCallArgs = "";
             }
             break;
+          }
 
-          case "response.completed":
-            // Only extract final text if nothing was streamed (fallback for non-streaming responses)
-            const completedResponse = (event as any).response;
-            if (streamedTextLength === 0 && completedResponse?.output) {
-              for (const outputItem of completedResponse.output) {
+          case "response.completed": {
+            const resp = event.response;
+            if (streamedTextLength === 0 && resp?.output) {
+              for (const outputItem of resp.output) {
                 if (outputItem.type === "message" && outputItem.content) {
-                  for (const contentPart of outputItem.content) {
-                    if (contentPart.type === "output_text" && contentPart.text) {
-                      yield {
-                        content: contentPart.text,
-                        toolCalls: undefined,
-                        finishReason: undefined,
-                      };
+                  for (const part of outputItem.content) {
+                    if (part.type === "output_text" && part.text) {
+                      yield { content: part.text, toolCalls: undefined, finishReason: null };
                     }
                   }
                 }
               }
             }
-            yield {
-              content: "",
-              toolCalls: undefined,
-              finishReason: "stop",
-            };
+            yield { content: "", toolCalls: undefined, finishReason: "stop" };
             break;
-            
+          }
+
           default:
-            // Log unhandled event types for debugging
             log.debug(`Unhandled LLM event type: ${event.type}`);
             break;
         }
@@ -177,17 +191,13 @@ export class AzureOpenAIClient {
     }
   }
 
-  private convertMessagesToInput(messages: Message[]): string | object[] {
-    // For simple cases, just use the last user message as input
-    // For complex multi-turn, build conversation array
+  private convertMessagesToInput(messages: Message[]): any {
     if (messages.length === 1 && messages[0]?.role === "user") {
       return messages[0].content as string;
     }
 
-    // Convert to Responses API format for multi-turn
-    // The Responses API uses a different format than Chat Completions
-    const inputItems: object[] = [];
-    
+    const inputItems: any[] = [];
+
     for (const msg of messages) {
       if (msg.role === "user") {
         inputItems.push({
@@ -197,7 +207,6 @@ export class AzureOpenAIClient {
         });
       } else if (msg.role === "assistant") {
         if (msg.tool_calls && msg.tool_calls.length > 0) {
-          // Add function calls as separate items
           for (const tc of msg.tool_calls) {
             inputItems.push({
               type: "function_call",
@@ -220,24 +229,16 @@ export class AzureOpenAIClient {
           call_id: msg.tool_call_id,
           output: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
         });
-      } else if (msg.role === "system") {
-        // System messages become part of instructions, handled separately
-        // Skip here as we pass instructions parameter
       }
     }
-    
+
     return inputItems;
   }
 
   private wrapError(error: unknown): LLMError {
-    if (error instanceof LLMError) {
-      return error;
-    }
-    
+    if (error instanceof LLMError) return error;
     const message = error instanceof Error ? error.message : "Unknown LLM error";
-    const statusCode = this.extractStatusCode(error);
-    
-    return new LLMError(message, statusCode);
+    return new LLMError(message, this.extractStatusCode(error));
   }
 
   private extractStatusCode(error: unknown): number | undefined {

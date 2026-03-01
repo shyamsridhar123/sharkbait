@@ -85,7 +85,7 @@ class SpanBuilder {
   constructor(tracer: Tracer, name: string, kind: SpanKind, parentContext?: TraceContext) {
     this.tracer = tracer;
     this.span = {
-      spanId: randomUUID().split("-")[0],
+      spanId: randomUUID().split("-")[0] || randomUUID(),
       traceId: parentContext?.traceId || randomUUID(),
       parentSpanId: parentContext?.spanId,
       name,

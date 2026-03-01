@@ -10,4 +10,4 @@ export { gitTools } from "./git";
 export { githubTools } from "./github";
 export { fetchTools } from "./fetch";
 export { codebaseTools } from "./codebase";
-export { TOOL_DEFINITIONS } from "./definitions";
+// TOOL_DEFINITIONS removed — use ToolRegistry.getDefinitions() instead

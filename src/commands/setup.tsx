@@ -349,14 +349,14 @@ AZURE_OPENAI_API_VERSION=2024-10-21
             <Text>
               <Text color={colors.primary}>[1]</Text>{" "}
               <Text color={state.enableBeads ? colors.success : colors.textDim}>
-                {state.enableBeads ? icons.check : "○"} Beads Memory
+                {state.enableBeads ? icons.success : "○"} Beads Memory
               </Text>
               <Text color={colors.textDim}> - Git-backed task persistence</Text>
             </Text>
             <Text>
               <Text color={colors.primary}>[2]</Text>{" "}
               <Text color={state.confirmDestructive ? colors.success : colors.textDim}>
-                {state.confirmDestructive ? icons.check : "○"} Confirm Destructive
+                {state.confirmDestructive ? icons.success : "○"} Confirm Destructive
               </Text>
               <Text color={colors.textDim}> - Require confirmation for risky commands</Text>
             </Text>
@@ -421,7 +421,7 @@ AZURE_OPENAI_API_VERSION=2024-10-21
       {step === "complete" && (
         <Box flexDirection="column">
           <Text color={colors.success} bold>
-            {icons.check} Setup Complete!
+            {icons.success} Setup Complete!
           </Text>
           <Box marginTop={1} flexDirection="column">
             <Text color={colors.textMuted}>Configuration saved to:</Text>

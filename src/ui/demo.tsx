@@ -27,7 +27,7 @@ function Demo(): React.JSX.Element {
       <Box marginBottom={1}>
         <Text color={colors.textMuted}>Logo (from public/images/ascii-art.txt):</Text>
       </Box>
-      <Logo variant="full" showTagline={false} />
+      <Logo variant="full" />
 
       <Box justifyContent="center" marginY={1}>
         <Text color={colors.border}>{box.horizontal.repeat(60)}</Text>

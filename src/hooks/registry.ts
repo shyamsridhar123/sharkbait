@@ -255,8 +255,9 @@ export class HookRegistry {
           currentArgs = result.modifiedArgs;
         }
       } catch (error) {
-        log.error(`PreToolUse hook '${hook.name}' failed: ${error}`);
-        // Continue with other hooks
+        // Fail-closed: if a security hook throws, block the operation
+        log.error(`PreToolUse hook '${hook.name}' failed: ${error}. Blocking tool execution (fail-closed).`);
+        return { proceed: false, reason: `Security hook '${hook.name}' encountered an error` };
       }
     }
 

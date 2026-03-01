@@ -24,7 +24,7 @@ export {
   getHomeDir, 
   normalizePath 
 } from "./platform";
-export { isCommandSafe, BLOCKED_COMMANDS } from "./security";
+export { classifyCommand, validatePath, validateUrl, sanitizeForLogging, getErrorMessage, type CommandSafety, type PathSafety, type UrlSafety } from "./security";
 
 // Telemetry (opt-in analytics)
 export {

@@ -1,5 +1,6 @@
 /**
  * Tool Registry - Central registry for all available tools
+ * Hooks are wired here so ALL tool execution goes through PreToolUse/PostToolUse
  */
 
 import type { ToolDefinition } from "../llm/types";
@@ -12,6 +13,8 @@ import { fetchTools } from "./fetch";
 import { codebaseTools } from "./codebase";
 import { ToolError } from "../utils/errors";
 import { log } from "../utils/logger";
+import { sanitizeForLogging } from "../utils/security";
+import { globalHooks } from "../hooks/registry";
 
 export interface Tool {
   name: string;
@@ -26,6 +29,7 @@ export interface ToolOptions {
 
 export class ToolRegistry {
   private tools: Map<string, Tool> = new Map();
+  private definitionsCache: ToolDefinition[] | null = null;
 
   constructor(options: ToolOptions = {}) {
     // Always register core tools
@@ -35,7 +39,7 @@ export class ToolRegistry {
     this.registerAll(githubTools);
     this.registerAll(fetchTools);
     this.registerAll(codebaseTools);
-    
+
     // Optionally register beads tools
     if (options.enableBeads !== false) {
       this.registerAll(beadsTools);
@@ -51,6 +55,8 @@ export class ToolRegistry {
       this.tools.set(tool.name, tool);
       log.debug(`Registered tool: ${tool.name}`);
     }
+    // Invalidate cache when tools change
+    this.definitionsCache = null;
   }
 
   /**
@@ -61,40 +67,102 @@ export class ToolRegistry {
       throw new ToolError(`Tool ${tool.name} already registered`, tool.name);
     }
     this.tools.set(tool.name, tool);
+    this.definitionsCache = null;
   }
 
   /**
-   * Get tool definitions for LLM
+   * Get tool definitions for LLM (cached — definitions don't change mid-session)
    */
   getDefinitions(): ToolDefinition[] {
-    return Array.from(this.tools.values()).map(t => ({
+    if (this.definitionsCache) {
+      return this.definitionsCache;
+    }
+
+    this.definitionsCache = Array.from(this.tools.values()).map((t) => ({
       name: t.name,
       description: t.description,
       parameters: t.parameters,
     }));
+
+    return this.definitionsCache;
   }
 
   /**
-   * Execute a tool by name
+   * Execute a tool by name.
+   * Runs through PreToolUse and PostToolUse hooks.
    */
-  async execute(name: string, args: Record<string, unknown>): Promise<unknown> {
+  async execute(
+    name: string,
+    args: Record<string, unknown>,
+    agentName: string = "default"
+  ): Promise<unknown> {
     const tool = this.tools.get(name);
-    
+
     if (!tool) {
       throw new ToolError(`Unknown tool: ${name}`, name);
     }
 
-    log.debug(`Executing tool ${name} with args: ${JSON.stringify(args)}`);
+    log.debug(`Executing tool ${name} with args: ${sanitizeForLogging(JSON.stringify(args))}`);
+
+    // ── PreToolUse hooks ──────────────────────────────────
+    const preResult = await globalHooks.executePreToolUse({
+      toolName: name,
+      args,
+      agentName,
+    });
+
+    if (!preResult.proceed) {
+      throw new ToolError(
+        `Tool blocked by hook: ${preResult.reason || "no reason given"}`,
+        name
+      );
+    }
+
+    // Use potentially modified args from hooks
+    const effectiveArgs = preResult.modifiedArgs || args;
+
+    // ── Execute ───────────────────────────────────────────
+    const startTime = Date.now();
+    let result: unknown;
+    let success = true;
+    let errorMessage: string | undefined;
 
     try {
-      const result = await tool.execute(args);
+      result = await tool.execute(effectiveArgs);
       log.debug(`Tool ${name} completed successfully`);
-      return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
+      success = false;
+      const message =
+        error instanceof Error ? error.message : "Unknown error";
+      errorMessage = message;
       log.error(`Tool ${name} failed: ${message}`);
+
+      // ── PostToolUse hooks (failure path) ────────────────
+      await globalHooks.executePostToolUse({
+        toolName: name,
+        args: effectiveArgs,
+        result: null,
+        durationMs: Date.now() - startTime,
+        success: false,
+        error: message,
+      });
+
       throw new ToolError(message, name);
     }
+
+    // ── PostToolUse hooks (success path) ──────────────────
+    const postResult = await globalHooks.executePostToolUse({
+      toolName: name,
+      args: effectiveArgs,
+      result,
+      durationMs: Date.now() - startTime,
+      success: true,
+    });
+
+    // Use potentially modified result from hooks
+    return postResult.modifiedResult !== undefined
+      ? postResult.modifiedResult
+      : result;
   }
 
   /**

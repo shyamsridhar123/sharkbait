@@ -1,6 +1,13 @@
 /**
  * Agent Loop - The agentic loop implementation with stall detection
  * Inspired by Microsoft Research Magentic-One and Anthropic's "Building Effective Agents"
+ *
+ * Changes from original:
+ * - Uses shared accumulateToolCalls from stream-utils (eliminated duplication)
+ * - Parallel tool execution via Promise.allSettled
+ * - Bounded messages array to prevent OOM
+ * - Hooks wired automatically via ToolRegistry.execute()
+ * - Uses getErrorMessage utility
  */
 
 import type { AzureOpenAIClient } from "../llm/azure-openai";
@@ -8,13 +15,15 @@ import type { ToolRegistry } from "../tools";
 import { ContextManager } from "./context";
 import { ProgressTracker, type TaskLedger, type ProgressLedger } from "./progress";
 import type { Message, ToolCall } from "../llm/types";
+import { accumulateToolCalls } from "../llm/stream-utils";
 import type { AgentEvent } from "./types";
 import { log } from "../utils/logger";
+import { getErrorMessage } from "../utils/security";
 
-// Constants for stall detection (inspired by Magentic-One)
-const STALL_THRESHOLD = 3;      // Consecutive steps without progress
-const MAX_REPLANS = 2;          // Maximum re-planning attempts
-const MAX_ITERATIONS = 50;      // Absolute limit on loop iterations
+const STALL_THRESHOLD = 3;
+const MAX_REPLANS = 2;
+const MAX_ITERATIONS = 50;
+const MAX_MESSAGES = 200;
 
 export class AgentLoop {
   private llm: AzureOpenAIClient;
@@ -38,8 +47,8 @@ export class AgentLoop {
 
   async *run(userMessage: string): AsyncGenerator<AgentEvent> {
     this.messages.push({ role: "user", content: userMessage });
-    
-    // Initialize task ledger for this request
+    this.boundMessages();
+
     const taskLedger: TaskLedger = {
       taskId: crypto.randomUUID(),
       objective: userMessage,
@@ -50,7 +59,7 @@ export class AgentLoop {
       lastReplanAt: new Date(),
       replanCount: 0,
     };
-    
+
     const progressLedger: ProgressLedger = {
       currentStep: 0,
       stepHistory: [],
@@ -58,39 +67,36 @@ export class AgentLoop {
       lastProgressAt: new Date(),
       agentAssignments: new Map(),
     };
-    
+
     let iteration = 0;
-    let summaryRequested = false; // Track if we've already asked for a summary
+    let summaryRequested = false;
 
     while (iteration < MAX_ITERATIONS) {
       iteration++;
       log.debug(`Agent loop iteration ${iteration}`);
-      
-      // Check for stalls and handle recovery
+
       const progressCheck = this.progressTracker.checkProgress(progressLedger, taskLedger);
-      
+
       if (progressCheck.type === "complete") {
         yield { type: "done" };
         return;
       }
-      
+
       if (progressCheck.type === "escalate") {
         yield { type: "error", message: progressCheck.reason ?? "Task escalated" };
         return;
       }
-      
+
       if (progressCheck.type === "replan") {
         yield { type: "replan", reason: progressCheck.reason ?? "Re-planning required" };
         taskLedger.replanCount++;
         taskLedger.lastReplanAt = new Date();
-        // Add re-planning context to messages
         this.messages.push({
           role: "system",
           content: `[Re-planning triggered: ${progressCheck.reason}]\nRevise your approach based on what we've learned.`,
         });
       }
-      
-      // Context management - compact if needed
+
       const contextMessages = await this.contextManager.checkAndCompact(
         {
           systemPrompt: this.systemPrompt,
@@ -105,8 +111,7 @@ export class AgentLoop {
           explorationFindings: [],
         }
       );
-      
-      // Stream LLM response
+
       let fullContent = "";
       let toolCalls: ToolCall[] = [];
 
@@ -120,67 +125,67 @@ export class AgentLoop {
             yield { type: "text", content: chunk.content };
           }
           if (chunk.toolCalls) {
-            toolCalls = this.accumulateToolCalls(toolCalls, chunk.toolCalls);
+            toolCalls = accumulateToolCalls(toolCalls, chunk.toolCalls);
           }
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown LLM error";
-        yield { type: "error", message: errorMessage };
+        yield { type: "error", message: getErrorMessage(error) };
         return;
       }
 
-      // No tool calls = done
       if (toolCalls.length === 0) {
-        // If we have no content but we executed tools in a previous iteration,
-        // request a summary from the LLM (only once to prevent infinite loops)
         if (!fullContent.trim() && progressLedger.stepHistory.length > 0 && !summaryRequested) {
           summaryRequested = true;
-          log.debug("No content after tool execution, requesting summary");
-          // Add a prompt to get a summary of what was done
           this.messages.push({
             role: "user",
             content: "What did you just do? Please summarize.",
           });
-          continue; // Re-run the loop to get a summary response
+          continue;
         }
-        
-        // If still no content after summary request, provide a default message
+
         if (!fullContent.trim() && progressLedger.stepHistory.length > 0) {
-          const toolNames = [...new Set(progressLedger.stepHistory.map(s => s.action))].join(", ");
-          fullContent = `✅ Task completed! I used: ${toolNames}`;
+          const toolNames = [...new Set(progressLedger.stepHistory.map((s) => s.action))].join(", ");
+          fullContent = `Task completed! I used: ${toolNames}`;
         }
-        
+
         this.messages.push({ role: "assistant", content: fullContent });
         yield { type: "done" };
         return;
       }
 
-      // Execute tool calls and track progress
+      // Execute tool calls in PARALLEL using Promise.allSettled
       this.messages.push({
         role: "assistant",
         content: fullContent,
         tool_calls: toolCalls,
       });
 
-      for (const call of toolCalls) {
-        const args = JSON.parse(call.function.arguments);
-        yield { type: "tool_start", name: call.function.name, args };
-        
-        try {
-          const result = await this.tools.execute(
-            call.function.name,
-            args
-          );
-          
+      const toolResults = await Promise.allSettled(
+        toolCalls.map(async (call) => {
+          const args = JSON.parse(call.function.arguments);
+          return {
+            call,
+            args,
+            result: await this.tools.execute(call.function.name, args),
+          };
+        })
+      );
+
+      for (let i = 0; i < toolResults.length; i++) {
+        const call = toolCalls[i]!;
+        const settled = toolResults[i]!;
+
+        if (settled.status === "fulfilled") {
+          const { args, result } = settled.value;
+          yield { type: "tool_start", name: call.function.name, args };
           yield { type: "tool_result", name: call.function.name, result };
-          
+
           this.messages.push({
             role: "tool",
             tool_call_id: call.id,
             content: JSON.stringify(result),
           });
-          
-          // Update progress tracking
+
           progressLedger.stepHistory.push({
             step: progressLedger.currentStep++,
             action: call.function.name,
@@ -189,98 +194,76 @@ export class AgentLoop {
           });
           progressLedger.stallCount = 0;
           progressLedger.lastProgressAt = new Date();
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : "Tool execution failed";
-          
-          yield { type: "tool_error", name: call.function.name, error: errorMessage };
-          
+        } else {
+          const errorMsg = getErrorMessage(settled.reason);
+          yield { type: "tool_start", name: call.function.name, args: {} };
+          yield { type: "tool_error", name: call.function.name, error: errorMsg };
+
           this.messages.push({
             role: "tool",
             tool_call_id: call.id,
-            content: JSON.stringify({ error: errorMessage }),
+            content: JSON.stringify({ error: errorMsg }),
           });
-          
-          // Track failed step
+
           progressLedger.stepHistory.push({
             step: progressLedger.currentStep++,
             action: call.function.name,
             timestamp: new Date(),
             success: false,
-            error: errorMessage,
+            error: errorMsg,
           });
           progressLedger.stallCount++;
         }
       }
-      
-      // Check for stall condition
+
+      this.boundMessages();
+
       if (progressLedger.stallCount >= STALL_THRESHOLD) {
         if (taskLedger.replanCount >= MAX_REPLANS) {
-          yield { type: "error", message: "Maximum re-planning attempts reached. Task cannot be completed." };
+          yield { type: "error", message: "Maximum re-planning attempts reached." };
           return;
         }
       }
     }
-    
+
     yield { type: "error", message: `Maximum iterations (${MAX_ITERATIONS}) reached` };
   }
 
-  private accumulateToolCalls(existing: ToolCall[], deltas: Partial<ToolCall>[]): ToolCall[] {
-    for (const delta of deltas) {
-      const index = delta.index ?? 0;
-      
-      if (!existing[index]) {
-        existing[index] = {
-          id: delta.id ?? "",
-          type: "function",
-          function: {
-            name: delta.function?.name ?? "",
-            arguments: delta.function?.arguments ?? "",
-          },
-          index,
-        };
-      } else {
-        if (delta.function?.arguments) {
-          existing[index].function.arguments += delta.function.arguments;
-        }
-      }
+  /**
+   * Prevent unbounded message array growth.
+   */
+  private boundMessages(): void {
+    if (this.messages.length > MAX_MESSAGES) {
+      const keepFirst = this.messages[0];
+      const keepRecent = this.messages.slice(-(MAX_MESSAGES - 1));
+      this.messages = keepFirst ? [keepFirst, ...keepRecent] : keepRecent;
+      log.debug(`Bounded messages array to ${this.messages.length}`);
     }
-    
-    return existing;
   }
 
   private buildSystemPrompt(): string {
-    return `You are Sharkbait, a brave and enthusiastic AI coding assistant! 🐠
+    return `You are Sharkbait, a brave and enthusiastic AI coding assistant!
 
-Just like Nemo, you're small but mighty - ready to take on any challenge with curiosity and determination. You've got fins, you can swim, and you can DEFINITELY help with this code!
+Just like Nemo, you're small but mighty - ready to take on any challenge with curiosity and determination.
 
 You have access to tools for:
 - Reading, writing, and editing files
 - Running shell commands
-- Managing tasks with Beads (bd) - your memory across the vast ocean!
+- Managing tasks with Beads (bd) - your memory system
 - Interacting with GitHub (gh)
 
-🪸 BEADS ARE YOUR LIFELINE - YOUR MEMORY SYSTEM:
-- Use beads_status or beads_list FIRST when the user asks about previous work, history, or "what we did"
-- ALWAYS create a Bead task when generating or modifying code - no exceptions!
-- Even "quick" tasks get a Bead - that's how you remember your adventures
+BEADS ARE YOUR MEMORY SYSTEM:
+- Use beads_status or beads_list FIRST when the user asks about previous work
+- ALWAYS create a Bead task when generating or modifying code
 - Use beads_create at the START of any coding task
 - Use beads_done when you've completed the work
-- Your memory is precious - don't let it float away!
-
-🔍 WHEN TO CHECK BEADS:
-- "What did we do?" / "What changes?" / "What happened?" → beads_list or beads_status FIRST
-- "Continue where we left off" → beads_status to see active tasks
-- Any question about past work → CHECK BEADS before git log
-- Beads IS your memory. Git is just version control.
 
 Guidelines:
-1. Always read files before editing - look before you leap (learned that one the hard way)
-2. Make precise, minimal edits - small fish, big impact!
-3. Create a Bead for EVERY code task - this is non-negotiable, friend!
-4. Ask for confirmation before destructive operations - we don't touch the butt (or delete important files)
-5. Stay enthusiastic and explain your reasoning - "I shall call it... my solution!"
-
-Remember: You're swimming in a big ocean of code, but together we can do this! 🦈
+1. Always read files before editing
+2. Make precise, minimal edits
+3. Create a Bead for EVERY code task
+4. Ask for confirmation before destructive operations
+5. Explain your reasoning clearly
 
 Current working directory: ${process.cwd()}
 Platform: ${process.platform}

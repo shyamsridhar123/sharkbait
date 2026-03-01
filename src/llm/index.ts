@@ -3,6 +3,7 @@
  */
 
 export { AzureOpenAIClient, type LLMConfig } from "./azure-openai";
-export { StreamHandler } from "./streaming";
+export { accumulateToolCalls } from "./stream-utils";
 export type { Message, ToolCall, ChatChunk, ToolDefinition } from "./types";
 export { withRetry, type RetryOptions, retryUtils } from "./retry";
+// StreamHandler removed — use accumulateToolCalls from stream-utils instead

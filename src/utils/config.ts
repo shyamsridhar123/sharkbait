@@ -1,9 +1,11 @@
 /**
  * Configuration - Load and validate configuration from multiple sources
+ * Uses JSON.parse (not require) and deep merge for safety
  */
 
 import { join } from "path";
 import { homedir } from "os";
+import { readFileSync, existsSync } from "fs";
 import { ConfigError } from "./errors";
 
 export interface Config {
@@ -26,23 +28,78 @@ export interface Config {
     maxIterations: number;
   };
   paths: {
-    configDir: string;      // Default: ~/.sharkbait
-    defaultWorkingDir: string | null;  // Default working directory (null = use cwd)
+    configDir: string;
+    defaultWorkingDir: string | null;
   };
 }
 
 let cachedConfig: Config | null = null;
+
+/**
+ * Deep merge source into target. Only merges plain objects — arrays and
+ * primitives from source overwrite target values.
+ */
+function deepMerge(
+  target: Record<string, any>,
+  source: Record<string, unknown>
+): Record<string, any> {
+  const result = { ...target };
+
+  for (const key of Object.keys(source)) {
+    const targetVal = result[key];
+    const sourceVal = source[key];
+
+    if (
+      targetVal &&
+      sourceVal &&
+      typeof targetVal === "object" &&
+      typeof sourceVal === "object" &&
+      !Array.isArray(targetVal) &&
+      !Array.isArray(sourceVal)
+    ) {
+      result[key] = deepMerge(
+        targetVal as Record<string, any>,
+        sourceVal as Record<string, unknown>
+      );
+    } else if (sourceVal !== undefined) {
+      result[key] = sourceVal;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Safely load a JSON config file. Returns null if not found or invalid.
+ * Uses JSON.parse (NOT require) to prevent code execution.
+ */
+function loadJsonConfig(filePath: string): Record<string, unknown> | null {
+  try {
+    if (!existsSync(filePath)) {
+      return null;
+    }
+    const raw = readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(raw);
+
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return null;
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
 
 export function loadConfig(): Config {
   if (cachedConfig) {
     return cachedConfig;
   }
 
-  // Config directory path
   const configDir = join(homedir(), ".sharkbait");
 
   // 1. Start with defaults
-  const config: Config = {
+  let config: Config = {
     azure: {
       endpoint: "",
       apiKey: "",
@@ -67,21 +124,20 @@ export function loadConfig(): Config {
     },
   };
 
-  // 2. Load from global config file if exists
+  // 2. Load from global config file (deep merge — partial configs are safe)
   const globalConfigPath = join(configDir, "config.json");
-  try {
-    const globalConfig = require(globalConfigPath);
-    Object.assign(config, globalConfig);
-  } catch {
-    // Global config doesn't exist, that's okay
+  const globalConfig = loadJsonConfig(globalConfigPath);
+  if (globalConfig) {
+    config = deepMerge(config as any, globalConfig) as Config;
   }
 
-  // 3. Load from project config file if exists
-  try {
-    const projectConfig = require(join(process.cwd(), ".sharkbait.json"));
-    Object.assign(config, projectConfig);
-  } catch {
-    // Project config doesn't exist, that's okay
+  // 3. Load from project config file (deep merge)
+  const projectConfigPath = join(process.cwd(), ".sharkbait.json");
+  const projectConfig = loadJsonConfig(projectConfigPath);
+  if (projectConfig) {
+    // Project config CANNOT override security-critical settings
+    delete projectConfig["features"];
+    config = deepMerge(config as any, projectConfig) as Config;
   }
 
   // 4. Override with environment variables
@@ -100,10 +156,14 @@ export function loadConfig(): Config {
     config.azure.apiVersion = process.env["AZURE_OPENAI_API_VERSION"];
   }
   if (process.env["SHARKBAIT_MAX_CONTEXT_TOKENS"]) {
-    config.limits.maxContextTokens = parseInt(process.env["SHARKBAIT_MAX_CONTEXT_TOKENS"], 10);
+    config.limits.maxContextTokens = parseInt(
+      process.env["SHARKBAIT_MAX_CONTEXT_TOKENS"],
+      10
+    );
   }
   if (process.env["SHARKBAIT_CONFIRM_DESTRUCTIVE"]) {
-    config.features.confirmDestructive = process.env["SHARKBAIT_CONFIRM_DESTRUCTIVE"] !== "false";
+    config.features.confirmDestructive =
+      process.env["SHARKBAIT_CONFIRM_DESTRUCTIVE"] !== "false";
   }
   if (process.env["SHARKBAIT_WORKING_DIR"]) {
     config.paths.defaultWorkingDir = process.env["SHARKBAIT_WORKING_DIR"];
@@ -115,18 +175,17 @@ export function loadConfig(): Config {
 
 /**
  * Get the effective working directory
- * Priority: CLI option > env var > config file > process.cwd()
  */
 export function getWorkingDir(cliOption?: string): string {
   if (cliOption) {
     return cliOption;
   }
-  
+
   const config = loadConfig();
   if (config.paths.defaultWorkingDir) {
     return config.paths.defaultWorkingDir;
   }
-  
+
   return process.cwd();
 }
 
@@ -153,10 +212,10 @@ export function validateConfig(config: Config): void {
       "Azure OpenAI endpoint is required. Set AZURE_OPENAI_ENDPOINT environment variable."
     );
   }
+  // apiKey is no longer required — Azure Identity is used when absent.
+  // Log the auth method for debugging.
   if (!config.azure.apiKey) {
-    throw new ConfigError(
-      "Azure OpenAI API key is required. Set AZURE_OPENAI_API_KEY environment variable."
-    );
+    // Will use DefaultAzureCredential at runtime
   }
 }
 

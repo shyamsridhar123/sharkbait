@@ -133,10 +133,18 @@ export class ParallelExecutor {
               break;
             case "done":
               clearTimeout(timeoutId);
-              resolve({
+              resolve(event.result ? {
                 ...event.result,
                 agent: invocation.agent,
                 mode: invocation.mode,
+              } : {
+                agent: invocation.agent,
+                mode: invocation.mode,
+                success: true,
+                output,
+                toolsCalled,
+                tokenCount: 0,
+                durationMs: Date.now() - startTime,
               });
               return;
             case "error":

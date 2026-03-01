@@ -131,9 +131,9 @@ class Histogram {
     }
 
     const sorted = [...this.samples].sort((a, b) => a - b);
-    const percentile = (p: number) => {
+    const percentile = (p: number): number => {
       const idx = Math.ceil((p / 100) * sorted.length) - 1;
-      return sorted[Math.max(0, idx)];
+      return sorted[Math.max(0, idx)] ?? 0;
     };
 
     return {
@@ -142,9 +142,9 @@ class Histogram {
       min: this.min === Infinity ? 0 : this.min,
       max: this.max === -Infinity ? 0 : this.max,
       mean: this.sum / this.samples.length,
-      p50: percentile(50),
-      p90: percentile(90),
-      p99: percentile(99),
+      p50: percentile(50) as number,
+      p90: percentile(90) as number,
+      p99: percentile(99) as number,
     };
   }
 

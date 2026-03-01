@@ -1,5 +1,6 @@
 /**
  * Built-in Hooks - Default hook implementations
+ * Uses centralized security module — no duplicate pattern lists
  */
 
 import type {
@@ -15,37 +16,11 @@ import type {
   OnTokenLimitResult,
 } from "./registry";
 import { globalHooks } from "./registry";
+import { classifyCommand, validatePath, validateUrl } from "../utils/security";
 import { log } from "../utils/logger";
 
 /**
- * Dangerous command patterns for shell execution
- */
-const DANGEROUS_PATTERNS = [
-  /rm\s+-rf\s+[\/~]/i,           // rm -rf with root or home
-  /rm\s+-rf\s+\*/,               // rm -rf *
-  />\s*\/dev\/sd[a-z]/i,         // Write to disk devices
-  /mkfs\./i,                     // Format filesystem
-  /dd\s+if=.*of=\/dev/i,         // dd to device
-  /chmod\s+-R\s+777/i,           // Dangerous permissions
-  /:\(\)\{\s*:\|:\s*&\s*\}/,     // Fork bomb
-];
-
-/**
- * Sensitive file patterns
- */
-const SENSITIVE_FILES = [
-  /\.env$/i,
-  /\.env\.(local|prod|production)/i,
-  /\.ssh\//i,
-  /id_rsa/i,
-  /\.aws\/credentials/i,
-  /\.npmrc$/i,
-  /passwords?\.(txt|json|yaml)/i,
-  /secrets?\.(txt|json|yaml)/i,
-];
-
-/**
- * Register safety hook for dangerous shell commands
+ * Register safety hook for shell commands using centralized allowlist
  */
 export function registerShellSafetyHook(): string {
   return globalHooks.register<PreToolUseContext, PreToolUseResult>(
@@ -57,15 +32,22 @@ export function registerShellSafetyHook(): string {
       }
 
       const command = String(context.args["command"] || "");
+      const safety = classifyCommand(command);
 
-      for (const pattern of DANGEROUS_PATTERNS) {
-        if (pattern.test(command)) {
-          log.warn(`Blocked dangerous command: ${command}`);
-          return {
-            proceed: false,
-            reason: `Blocked potentially dangerous command matching pattern: ${pattern.source}`,
-          };
-        }
+      if (safety.status === "blocked") {
+        log.warn(`Blocked dangerous command: ${command}`);
+        return {
+          proceed: false,
+          reason: safety.reason,
+        };
+      }
+
+      if (safety.status === "requires_confirmation") {
+        log.warn(`Command requires confirmation: ${command} — ${safety.reason}`);
+        return {
+          proceed: false,
+          reason: `${safety.reason} (reversibility: ${safety.reversibility})`,
+        };
       }
 
       return { proceed: true };
@@ -75,30 +57,70 @@ export function registerShellSafetyHook(): string {
 }
 
 /**
- * Register hook to warn about sensitive file access
+ * Register hook to block writes to sensitive files and warn on reads
  */
 export function registerSensitiveFileHook(): string {
   return globalHooks.register<PreToolUseContext, PreToolUseResult>(
     "PreToolUse",
-    "sensitive-file-warning",
+    "sensitive-file-guard",
     async (context) => {
-      if (!["read_file", "write_file", "edit_file"].includes(context.toolName)) {
+      if (!["read_file", "write_file", "edit_file", "create_directory"].includes(context.toolName)) {
         return { proceed: true };
       }
 
       const filePath = String(context.args["path"] || context.args["filePath"] || "");
+      if (!filePath) return { proceed: true };
 
-      for (const pattern of SENSITIVE_FILES) {
-        if (pattern.test(filePath)) {
-          log.warn(`Accessing sensitive file: ${filePath}`);
-          // Allow but log - could be changed to block
-          return { proceed: true };
-        }
+      const isWrite = ["write_file", "edit_file", "create_directory"].includes(context.toolName);
+      const safety = validatePath(filePath, process.cwd(), isWrite ? "write" : "read");
+
+      if (safety.status === "blocked") {
+        log.warn(`Blocked file access: ${filePath} — ${safety.reason}`);
+        return {
+          proceed: false,
+          reason: safety.reason,
+        };
+      }
+
+      if (safety.status === "sensitive") {
+        log.warn(`Sensitive file access: ${filePath} — ${safety.reason}`);
+        // Allow reads of sensitive files with logging, but the path sandboxing
+        // already blocks writes via validatePath
       }
 
       return { proceed: true };
     },
     20
+  );
+}
+
+/**
+ * Register SSRF protection hook for fetch tools
+ */
+export function registerSsrfProtectionHook(): string {
+  return globalHooks.register<PreToolUseContext, PreToolUseResult>(
+    "PreToolUse",
+    "ssrf-protection",
+    async (context) => {
+      if (!["fetch_webpage", "fetch_json"].includes(context.toolName)) {
+        return { proceed: true };
+      }
+
+      const url = String(context.args["url"] || "");
+      if (!url) return { proceed: true };
+
+      const safety = validateUrl(url);
+      if (safety.status === "blocked") {
+        log.warn(`SSRF blocked: ${url} — ${safety.reason}`);
+        return {
+          proceed: false,
+          reason: safety.reason,
+        };
+      }
+
+      return { proceed: true };
+    },
+    15
   );
 }
 
@@ -113,7 +135,6 @@ export function registerCachingHook(): string {
     "PostToolUse",
     "result-cache",
     async (context) => {
-      // Only cache read operations
       if (!context.toolName.startsWith("read_") && context.toolName !== "list_directory") {
         return {};
       }
@@ -224,14 +245,12 @@ export function registerCompactionHook(): string {
       const usage = context.currentTokens / context.maxTokens;
 
       if (usage > 0.9) {
-        // Critical - aggressive compaction
         return {
           compact: true,
           summarize: true,
           dropOldest: Math.max(5, Math.floor(context.messageCount * 0.3)),
         };
       } else if (usage > 0.8) {
-        // Warning - moderate compaction
         return {
           compact: true,
           summarize: false,
@@ -251,10 +270,11 @@ export function registerCompactionHook(): string {
 export function registerBuiltinHooks(): void {
   registerShellSafetyHook();
   registerSensitiveFileHook();
+  registerSsrfProtectionHook();
   registerIterationLimitHook();
   registerTokenLimitHook();
   registerRetryHook();
   registerCompactionHook();
-  
-  log.info("Registered built-in hooks");
+
+  log.info("Registered built-in hooks (including SSRF protection)");
 }

@@ -1,115 +1,17 @@
 /**
- * Shell Execution Tool - Run commands with reversibility classification
- * Inspired by Magentic-One research on action reversibility
+ * Shell Execution Tool - Run commands with allowlist-based security
+ * Uses centralized security module for command classification
  */
 
 import type { Tool } from "./registry";
-
-// Action reversibility classification
-enum Reversibility {
-  EASY = "easy",           // Can be undone trivially (git checkout, mkdir)
-  EFFORT = "effort",       // Can be undone with effort (git push, npm publish)
-  IRREVERSIBLE = "irreversible",  // Cannot be undone (rm -rf, email sent)
-}
-
-interface ActionClassification {
-  reversibility: Reversibility;
-  requiresConfirmation: boolean;
-  undoCommand?: string;
-}
-
-// Pattern-based classification for common dangerous commands
-const ACTION_CLASSIFICATIONS: Array<[RegExp, ActionClassification]> = [
-  // Irreversible - always block or require confirmation
-  [/rm\s+-rf\s+[\/~]/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/rm\s+-rf\s+\*/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/>\s*\/dev\/sd/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/mkfs/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/dd\s+if=/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/:\s*\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}/, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/DROP\s+DATABASE/i, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/TRUNCATE\s+TABLE/i, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  [/DELETE\s+FROM\s+\w+\s*;?\s*$/i, { reversibility: Reversibility.IRREVERSIBLE, requiresConfirmation: true }],
-  
-  // Effort to reverse - warn but allow
-  [/git\s+push\s+.*--force/, { 
-    reversibility: Reversibility.EFFORT, 
-    requiresConfirmation: true, 
-    undoCommand: "git reflog + push" 
-  }],
-  [/npm\s+publish/, { 
-    reversibility: Reversibility.EFFORT, 
-    requiresConfirmation: true 
-  }],
-  [/git\s+push/, { 
-    reversibility: Reversibility.EFFORT, 
-    requiresConfirmation: false, 
-    undoCommand: "git revert or git push --force (with care)" 
-  }],
-  
-  // Easy to reverse - proceed with logging
-  [/git\s+checkout/, { 
-    reversibility: Reversibility.EASY, 
-    requiresConfirmation: false, 
-    undoCommand: "git checkout -" 
-  }],
-  [/git\s+branch\s+-d/, { 
-    reversibility: Reversibility.EASY, 
-    requiresConfirmation: false, 
-    undoCommand: "git branch <name> <sha>" 
-  }],
-  [/mkdir/, { 
-    reversibility: Reversibility.EASY, 
-    requiresConfirmation: false, 
-    undoCommand: "rmdir" 
-  }],
-];
-
-// Commands that should never be executed
-const BLOCKED_COMMANDS = [
-  /rm\s+-rf\s+\/(?!\w)/, // rm -rf / (but not /path)
-  /:\s*\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}/, // Fork bomb - flexible whitespace matching
-  /dd\s+if=.*of=\/dev\/sd/, // Disk overwrite
-  /chmod\s+777\s+\//, // Dangerous permissions on root
-  /curl.*\|\s*(?:ba)?sh/, // Pipe curl to shell
-  /wget.*\|\s*(?:ba)?sh/, // Pipe wget to shell
-];
-
-function classifyAction(command: string): ActionClassification {
-  // Check blocked commands first
-  for (const pattern of BLOCKED_COMMANDS) {
-    if (pattern.test(command)) {
-      return { 
-        reversibility: Reversibility.IRREVERSIBLE, 
-        requiresConfirmation: true 
-      };
-    }
-  }
-  
-  // Check known patterns
-  for (const [pattern, classification] of ACTION_CLASSIFICATIONS) {
-    if (pattern.test(command)) {
-      return classification;
-    }
-  }
-  
-  // Default: unknown commands are treated as needing caution
-  return { reversibility: Reversibility.EFFORT, requiresConfirmation: false };
-}
-
-function isCommandBlocked(command: string): boolean {
-  for (const pattern of BLOCKED_COMMANDS) {
-    if (pattern.test(command)) {
-      return true;
-    }
-  }
-  return false;
-}
+import { classifyCommand, type CommandSafety } from "../utils/security";
+import { ToolError } from "../utils/errors";
+import { getErrorMessage } from "../utils/security";
 
 export const shellTools: Tool[] = [
   {
     name: "run_command",
-    description: "Execute a shell command",
+    description: "Execute a shell command. Commands must be on the allowlist or will require user confirmation.",
     parameters: {
       type: "object",
       properties: {
@@ -124,62 +26,59 @@ export const shellTools: Tool[] = [
       const cmd = command as string;
       const workingDir = (cwd as string) || process.cwd();
       const timeoutMs = (timeout as number) || 30000;
-      
-      // Check if command is blocked
-      if (isCommandBlocked(cmd)) {
-        throw new Error(`Blocked dangerous command: ${cmd}`);
-      }
-      
-      // Classify action reversibility
-      const classification = classifyAction(cmd);
-      
-      if (classification.reversibility === Reversibility.IRREVERSIBLE) {
-        throw new Error(
-          `Irreversible action blocked: ${cmd}. ` +
-          `This action cannot be undone. Please confirm manually.`
+
+      // Classify command using centralized security
+      const safety = classifyCommand(cmd);
+
+      if (safety.status === "blocked") {
+        throw new ToolError(
+          `Blocked dangerous command: ${safety.reason}`,
+          "run_command"
         );
       }
-      
-      // Log warning for effort-level reversibility
-      if (classification.requiresConfirmation) {
-        console.warn(`⚠️  Action requires care: ${cmd}`);
-        console.warn(`   Reversibility: ${classification.reversibility}`);
-        if (classification.undoCommand) {
-          console.warn(`   To undo: ${classification.undoCommand}`);
-        }
+
+      if (safety.status === "requires_confirmation") {
+        throw new ToolError(
+          `Command requires confirmation: ${safety.reason}` +
+            (safety.reversibility === "irreversible"
+              ? " (IRREVERSIBLE)"
+              : ` (reversibility: ${safety.reversibility})`) +
+            (safety.undoHint ? `. To undo: ${safety.undoHint}` : ""),
+          "run_command"
+        );
       }
 
       if (background) {
-        // Start background process
         const shell = process.platform === "win32" ? "cmd" : "sh";
         const shellArg = process.platform === "win32" ? "/c" : "-c";
-        
+
         const proc = Bun.spawn([shell, shellArg, cmd], {
           cwd: workingDir,
           stdout: "pipe",
           stderr: "pipe",
         });
-        
-        return { 
-          pid: proc.pid, 
+
+        return {
+          pid: proc.pid,
           message: "Started in background",
-          reversibility: classification.reversibility,
         };
       }
 
       try {
         const shell = process.platform === "win32" ? "cmd" : "sh";
         const shellArg = process.platform === "win32" ? "/c" : "-c";
-        
+
         const proc = Bun.spawn([shell, shellArg, cmd], {
           cwd: workingDir,
           stdout: "pipe",
           stderr: "pipe",
         });
 
-        // Handle timeout
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`Command timed out after ${timeoutMs}ms`)), timeoutMs);
+          setTimeout(
+            () => reject(new Error(`Command timed out after ${timeoutMs}ms`)),
+            timeoutMs
+          );
         });
 
         const outputPromise = (async () => {
@@ -189,20 +88,20 @@ export const shellTools: Tool[] = [
           return { stdout, stderr, exitCode };
         })();
 
-        const { stdout, stderr, exitCode } = await Promise.race([outputPromise, timeoutPromise]);
-        
-        return { 
-          stdout: stdout.trim(), 
+        const { stdout, stderr, exitCode } = await Promise.race([
+          outputPromise,
+          timeoutPromise,
+        ]);
+
+        return {
+          stdout: stdout.trim(),
           stderr: stderr.trim(),
           exitCode,
-          reversibility: classification.reversibility,
-          undoHint: classification.undoCommand,
         };
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Command failed";
-        return { 
+        return {
           stdout: "",
-          stderr: message,
+          stderr: getErrorMessage(error),
           exitCode: 1,
         };
       }
@@ -210,46 +109,73 @@ export const shellTools: Tool[] = [
   },
   {
     name: "open_file",
-    description: "Open a file or URL in the default application (browser, editor, etc)",
+    description:
+      "Open a file or URL in the default application (browser, editor, etc). " +
+      "Only allows safe application names (e.g., 'code', 'chrome', 'firefox').",
     parameters: {
       type: "object",
       properties: {
-        path: { type: "string", description: "File path or URL to open" },
-        application: { type: "string", description: "Optional: specific application to use (e.g., 'chrome', 'code')" },
+        path: {
+          type: "string",
+          description: "File path or URL to open",
+        },
+        application: {
+          type: "string",
+          description:
+            "Optional: specific application to use (e.g., 'chrome', 'code')",
+        },
       },
       required: ["path"],
     },
     async execute({ path, application }) {
       const target = path as string;
       const app = application as string | undefined;
-      
+
+      // Sanitize application name — only allow known-safe applications
+      const SAFE_APPS = [
+        "code",
+        "cursor",
+        "chrome",
+        "firefox",
+        "safari",
+        "brave",
+        "edge",
+        "vim",
+        "nano",
+        "less",
+        "more",
+        "preview",
+      ];
+
+      if (app && !SAFE_APPS.includes(app.toLowerCase())) {
+        throw new ToolError(
+          `Application "${app}" is not in the allowed list: ${SAFE_APPS.join(", ")}`,
+          "open_file"
+        );
+      }
+
       let cmd: string[];
-      
+
       if (process.platform === "win32") {
-        if (app) {
-          // Use specific application
-          cmd = ["cmd", "/c", "start", "", app, target];
-        } else {
-          // Use default application - start command opens with default
-          cmd = ["cmd", "/c", "start", "", target];
-        }
+        cmd = app
+          ? ["cmd", "/c", "start", "", app, target]
+          : ["cmd", "/c", "start", "", target];
       } else if (process.platform === "darwin") {
         cmd = app ? ["open", "-a", app, target] : ["open", target];
       } else {
         cmd = app ? [app, target] : ["xdg-open", target];
       }
-      
+
       try {
         const proc = Bun.spawn(cmd, {
           stdout: "pipe",
           stderr: "pipe",
         });
-        
+
         await proc.exited;
         return { success: true, message: `Opened ${target}` };
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to open";
-        return { success: false, error: message };
+        return { success: false, error: getErrorMessage(error) };
       }
     },
   },

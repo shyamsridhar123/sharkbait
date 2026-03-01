@@ -3,6 +3,8 @@
  */
 
 import type { Tool } from "./registry";
+import { validateUrl } from "../utils/security";
+import { SecurityError } from "../utils/errors";
 
 /**
  * Extract readable content from HTML
@@ -109,11 +111,10 @@ export const fetchTools: Tool[] = [
     async execute({ url, includeLinks, raw }) {
       const targetUrl = url as string;
 
-      // Validate URL
-      try {
-        new URL(targetUrl);
-      } catch {
-        throw new Error(`Invalid URL: ${targetUrl}`);
+      // Validate URL format and SSRF protection (defense in depth)
+      const urlSafety = validateUrl(targetUrl);
+      if (urlSafety.status === "blocked") {
+        throw new SecurityError(urlSafety.reason);
       }
 
       try {
@@ -188,10 +189,10 @@ export const fetchTools: Tool[] = [
       const targetUrl = url as string;
       const httpMethod = (method as string) || "GET";
 
-      try {
-        new URL(targetUrl);
-      } catch {
-        throw new Error(`Invalid URL: ${targetUrl}`);
+      // Validate URL format and SSRF protection (defense in depth)
+      const urlSafety = validateUrl(targetUrl);
+      if (urlSafety.status === "blocked") {
+        throw new SecurityError(urlSafety.reason);
       }
 
       const requestHeaders: Record<string, string> = {
