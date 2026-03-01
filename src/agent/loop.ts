@@ -120,6 +120,9 @@ export class AgentLoop {
           [{ role: "system", content: this.systemPrompt }, ...contextMessages],
           this.tools.getDefinitions()
         )) {
+          if (chunk.reasoning) {
+            yield { type: "reasoning", content: chunk.reasoning };
+          }
           if (chunk.content) {
             fullContent += chunk.content;
             yield { type: "text", content: chunk.content };

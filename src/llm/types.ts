@@ -21,6 +21,7 @@ export interface ToolCall {
 
 export interface ChatChunk {
   content: string;
+  reasoning?: string;
   toolCalls?: Partial<ToolCall>[] | undefined;
   finishReason: string | null;
 }

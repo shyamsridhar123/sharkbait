@@ -95,6 +95,7 @@ export class AzureOpenAIClient {
           instructions,
           tools: toolsConfig,
           stream: true,
+          reasoning: { effort: "medium", summary: "auto" },
         });
       },
       {
@@ -166,6 +167,18 @@ export class AzureOpenAIClient {
             }
             break;
           }
+
+          case "response.reasoning_summary_text.delta": {
+            const reasoningDelta: string = event.delta || "";
+            if (reasoningDelta) {
+              yield { content: "", reasoning: reasoningDelta, toolCalls: undefined, finishReason: null };
+            }
+            break;
+          }
+
+          case "response.reasoning_summary_text.done":
+            // All reasoning summary text already streamed via deltas
+            break;
 
           case "response.completed": {
             const resp = event.response;

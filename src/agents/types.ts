@@ -129,6 +129,7 @@ export interface AgentState {
 export type AgentStreamEvent =
   | { type: "agent_start"; agent: AgentRole; mode?: PromptingMode }
   | { type: "text"; content: string }
+  | { type: "reasoning"; content: string }
   | { type: "tool_start"; name: string; args?: Record<string, unknown> }
   | { type: "tool_result"; name: string; result: unknown }
   | { type: "tool_error"; name: string; error: string }

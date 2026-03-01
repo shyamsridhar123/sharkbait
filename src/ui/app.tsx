@@ -107,6 +107,8 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
     strategy: "all" | "race" | "quorum";
   } | null>(null);
   const [thinkingMessage, setThinkingMessage] = useState<string | null>(null);
+  const [currentReasoning, setCurrentReasoning] = useState("");
+  const pendingReasoningRef = useRef<string>("");
   const [currentModel, setCurrentModel] = useState(() => {
     const config = loadConfig();
     return config.azure.deployment;
@@ -124,9 +126,11 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
   // Flush pending streaming output, tokens, and cost to state in a single batch
   const flushOutput = useCallback(() => {
     const output = pendingOutputRef.current;
+    const reasoning = pendingReasoningRef.current;
     const tokens = pendingTokensRef.current;
     const cost = pendingCostRef.current;
     if (output) setCurrentOutput(output);
+    if (reasoning) setCurrentReasoning(reasoning);
     if (tokens > 0) {
       setTokenCount(prev => prev + tokens);
       pendingTokensRef.current = 0;
@@ -330,6 +334,8 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
     setIsLoading(true);
     setIsExecuting(true);
     setCurrentOutput("");
+    setCurrentReasoning("");
+    pendingReasoningRef.current = "";
     setActiveToolCalls([]);
     
     // Track tokens from user message
@@ -350,6 +356,13 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
         }
         
         switch (event.type) {
+          case "reasoning":
+            pendingReasoningRef.current += event.content;
+            if (!outputTimerRef.current) {
+              outputTimerRef.current = setTimeout(flushOutput, 80);
+            }
+            break;
+
           case "text":
             assistantContent += event.content;
             const chunkTokens = estimateTokens(event.content);
@@ -487,6 +500,8 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
               pendingCostRef.current = 0;
             }
             pendingOutputRef.current = "";
+            pendingReasoningRef.current = "";
+            setCurrentReasoning("");
             // Only add message if there's actual content
             if (assistantContent.trim()) {
               setMessages(prev => [...prev, { 
@@ -618,6 +633,13 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             />
           )}
           
+          {currentReasoning && (
+            <Box marginLeft={3} marginBottom={0}>
+              <Text color={colors.textDim} dimColor>{'💭 '}</Text>
+              <Text color={colors.textDim} dimColor wrap="wrap">{currentReasoning}</Text>
+            </Box>
+          )}
+
           {currentOutput && (
             <MessageView role="assistant" content={currentOutput} enableHighlighting={false} />
           )}

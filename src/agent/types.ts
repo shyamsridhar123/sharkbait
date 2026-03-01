@@ -16,6 +16,7 @@ export interface ParallelAgentProgress {
 
 export type AgentEvent =
   | { type: "text"; content: string }
+  | { type: "reasoning"; content: string }
   | { type: "tool_start"; name: string; args?: Record<string, unknown> }
   | { type: "tool_result"; name: string; result: unknown; duration?: number }
   | { type: "tool_error"; name: string; error: string; duration?: number }

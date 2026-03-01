@@ -56,6 +56,7 @@ interface SessionState {
     strategy: "all" | "race" | "quorum";
   } | null;
   thinkingMessage: string | null;
+  currentReasoning: string;
   currentModel: string;
 }
 
@@ -83,6 +84,7 @@ type SessionAction =
   | { type: "SET_CURRENT_AGENT"; value: string | null }
   | { type: "SET_PARALLEL_PROGRESS"; value: SessionState["parallelProgress"] }
   | { type: "SET_THINKING"; value: string | null }
+  | { type: "APPEND_REASONING"; content: string }
   | { type: "SET_MODEL"; value: string }
   | { type: "SET_TOKEN_COUNT"; value: number }
   | { type: "ADD_TOKENS"; delta: number }
@@ -150,6 +152,8 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
       return { ...state, parallelProgress: action.value };
     case "SET_THINKING":
       return { ...state, thinkingMessage: action.value };
+    case "APPEND_REASONING":
+      return { ...state, currentReasoning: state.currentReasoning + action.content };
     case "SET_MODEL":
       return { ...state, currentModel: action.value };
     case "SET_TOKEN_COUNT":
@@ -162,6 +166,7 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
         isLoading: false,
         isExecuting: false,
         currentOutput: "",
+        currentReasoning: "",
         activeToolCalls: [],
         messages: [
           ...state.messages,
@@ -172,6 +177,7 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
       return {
         ...state,
         currentOutput: "",
+        currentReasoning: "",
         activeToolCalls: [],
         currentAgent: null,
         thinkingMessage: null,
@@ -244,6 +250,7 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
     isExecuting: false,
     parallelProgress: null,
     thinkingMessage: null,
+    currentReasoning: "",
     currentModel: config.azure.deployment,
   });
 
@@ -266,6 +273,10 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
           if (abortControllerRef.current?.signal.aborted) break;
 
           switch (event.type) {
+            case "reasoning":
+              dispatch({ type: "APPEND_REASONING", content: event.content });
+              break;
+
             case "text": {
               const tokens = estimateTokens(event.content);
               assistantContent += event.content;

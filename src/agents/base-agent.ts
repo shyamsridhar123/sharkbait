@@ -119,6 +119,9 @@ export abstract class BaseAgent {
           messagesToSend,
           this.getTools()
         )) {
+          if (chunk.reasoning) {
+            yield { type: "reasoning", content: chunk.reasoning };
+          }
           if (chunk.content) {
             fullContent += chunk.content;
             yield { type: "text", content: chunk.content };
