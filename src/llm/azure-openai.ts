@@ -111,6 +111,7 @@ export class AzureOpenAIClient {
     let currentToolCallId = "";
     let currentToolCallName = "";
     let currentToolCallArgs = "";
+    let toolCallIndex = 0;
     let streamedTextLength = 0;
 
     try {
@@ -155,7 +156,7 @@ export class AzureOpenAIClient {
                     name: currentToolCallName,
                     arguments: currentToolCallArgs || doneItem.arguments || "",
                   },
-                  index: 0,
+                  index: toolCallIndex++,
                 }],
                 finishReason: "tool_calls",
               };

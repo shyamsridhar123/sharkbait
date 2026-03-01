@@ -159,7 +159,12 @@ export abstract class BaseAgent {
       // Execute tool calls in parallel
       const toolResults = await Promise.allSettled(
         toolCalls.map(async (call) => {
-          const args = JSON.parse(call.function.arguments);
+          let args: Record<string, unknown>;
+          try {
+            args = JSON.parse(call.function.arguments);
+          } catch (parseErr) {
+            throw new Error(`Invalid tool arguments for ${call.function.name}: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
+          }
           return {
             call,
             result: await this.toolRegistry.execute(
