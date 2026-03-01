@@ -204,17 +204,6 @@ const REQUIRES_CONFIRMATION: Array<{
 
 // ─── COMMAND CLASSIFICATION ────────────────────────────────────────────────────
 
-// Shell metacharacters that chain or compose commands.
-// Any command containing these requires all sub-commands to be checked.
-const SHELL_CHAINING_PATTERNS: RegExp[] = [
-  /;/,                    // Command separator
-  /\|\|/,                 // OR chaining
-  /&&/,                   // AND chaining
-  /\$\(/,                 // Command substitution
-  /`[^`]+`/,              // Backtick substitution
-  /\|\s*\w/,              // Pipe to another command (not just |)
-];
-
 // Prefixes that should NOT be silently stripped (they escalate privileges)
 const DANGEROUS_PREFIXES = ["sudo", "doas", "pkexec", "exec"];
 
@@ -264,27 +253,48 @@ export function classifyCommand(command: string): CommandSafety {
     };
   }
 
-  // 4. Check for shell chaining metacharacters
-  // If present, require confirmation since we can't verify all sub-commands
-  for (const pattern of SHELL_CHAINING_PATTERNS) {
-    if (pattern.test(trimmed)) {
-      return {
-        status: "requires_confirmation",
-        reason: "Command contains shell operators (;, &&, ||, |, $()) — each sub-command cannot be independently verified",
-        reversibility: "effort",
-      };
-    }
+  // 4. If command contains shell operators, classify each sub-command individually.
+  //    $() and backtick substitution still require confirmation (dynamic evaluation).
+  if (/\$\(/.test(trimmed) || /`[^`]+`/.test(trimmed)) {
+    return {
+      status: "requires_confirmation",
+      reason: "Command contains command substitution ($() or backticks)",
+      reversibility: "effort",
+    };
   }
 
-  // 5. Extract the base command (first word, stripping env vars)
-  const baseCommand = extractBaseCommand(trimmed);
+  const hasChaining = /;|&&|\|\||(\|\s*\w)/.test(trimmed);
+  if (hasChaining) {
+    // Split into sub-commands by ;, &&, || and pipe segments
+    const subCommands = trimmed
+      .split(/\s*(?:;|&&|\|\|)\s*/)
+      .flatMap((segment) => segment.split(/\s*\|\s*/))
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-  // 6. Check against allowlist
-  if (isOnAllowlist(baseCommand, trimmed)) {
+    for (const sub of subCommands) {
+      const subSafety = classifySimpleCommand(sub);
+      if (subSafety.status === "blocked") return subSafety;
+      if (subSafety.status === "requires_confirmation") return subSafety;
+    }
+    // All sub-commands are allowed
     return { status: "allowed" };
   }
 
-  // 7. Unknown command — require confirmation
+  // 5. Simple (non-compound) command — classify directly
+  return classifySimpleCommand(trimmed);
+}
+
+/**
+ * Classify a single (non-compound) command against the allowlist.
+ */
+function classifySimpleCommand(command: string): CommandSafety {
+  const baseCommand = extractBaseCommand(command);
+
+  if (isOnAllowlist(baseCommand, command)) {
+    return { status: "allowed" };
+  }
+
   return {
     status: "requires_confirmation",
     reason: `Unknown command "${baseCommand}" is not on the allowlist`,

