@@ -26,7 +26,7 @@ export function Spinner({
   useEffect(() => {
     const timer = setInterval(() => {
       setFrameIndex(prev => (prev + 1) % frames.length);
-    }, 100);  // Slower animation to reduce flicker
+    }, 200);  // Slow animation to reduce re-renders
 
     return () => clearInterval(timer);
   }, [frames.length]);

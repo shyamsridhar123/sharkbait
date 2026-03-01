@@ -112,9 +112,35 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
     return config.azure.deployment;
   });
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Throttle streaming output updates to reduce re-renders
+  const pendingOutputRef = useRef<string>("");
+  const outputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { exit } = useApp();
 
   const workingDir = currentDir;
+
+  // Flush pending streaming output to state
+  const flushOutput = useCallback(() => {
+    if (pendingOutputRef.current) {
+      setCurrentOutput(pendingOutputRef.current);
+    }
+    outputTimerRef.current = null;
+  }, []);
+
+  // Throttled setter: accumulates in ref, flushes every 50ms
+  const throttledSetOutput = useCallback((content: string) => {
+    pendingOutputRef.current = content;
+    if (!outputTimerRef.current) {
+      outputTimerRef.current = setTimeout(flushOutput, 50);
+    }
+  }, [flushOutput]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (outputTimerRef.current) clearTimeout(outputTimerRef.current);
+    };
+  }, []);
 
   const agent = React.useMemo(() => new Agent({
     contextFiles,
@@ -311,7 +337,7 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
         switch (event.type) {
           case "text":
             assistantContent += event.content;
-            setCurrentOutput(assistantContent);
+            throttledSetOutput(assistantContent);
             // Track output tokens
             const chunkTokens = estimateTokens(event.content);
             setTokenCount(prev => prev + chunkTokens);
@@ -391,26 +417,25 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
           
           case "tool_result": {
             const duration = event.duration;
-            // Update the tool call status
-            setActiveToolCalls(prev => prev.map(tc => 
-              tc.name === event.name && tc.status === "running"
-                ? { 
-                    ...tc, 
-                    status: "success" as const, 
-                    duration,
-                    result: typeof event.result === "string" 
-                      ? event.result.slice(0, 100) 
-                      : JSON.stringify(event.result).slice(0, 100)
-                  }
-                : tc
-            ));
-            // Move to completed
+            // Update status and remove in a single state update
             setActiveToolCalls(prev => {
-              const completed = prev.find(tc => tc.name === event.name && tc.status === "success");
+              const updated = prev.map(tc => 
+                tc.name === event.name && tc.status === "running"
+                  ? { 
+                      ...tc, 
+                      status: "success" as const, 
+                      duration,
+                      result: typeof event.result === "string" 
+                        ? event.result.slice(0, 100) 
+                        : JSON.stringify(event.result).slice(0, 100)
+                    }
+                  : tc
+              );
+              const completed = updated.find(tc => tc.name === event.name && tc.status === "success");
               if (completed) {
                 completedToolCalls.push(completed);
               }
-              return prev.filter(tc => !(tc.name === event.name && tc.status === "success"));
+              return updated.filter(tc => !(tc.name === event.name && tc.status === "success"));
             });
             break;
           }
@@ -436,6 +461,12 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             break;
             
           case "done":
+            // Flush any remaining throttled output
+            if (outputTimerRef.current) {
+              clearTimeout(outputTimerRef.current);
+              outputTimerRef.current = null;
+            }
+            pendingOutputRef.current = "";
             // Only add message if there's actual content
             if (assistantContent.trim()) {
               setMessages(prev => [...prev, { 
@@ -568,7 +599,7 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
           )}
           
           {currentOutput && (
-            <MessageView role="assistant" content={currentOutput} />
+            <MessageView role="assistant" content={currentOutput} enableHighlighting={false} />
           )}
         </Box>
       )}

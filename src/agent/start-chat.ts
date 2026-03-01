@@ -32,7 +32,8 @@ export async function startChat(options: ChatOptions = {}): Promise<void> {
       enableBeads: options.beads ?? true,
       version: VERSION,
       workingDir,
-    })
+    }),
+    { patchConsole: true }
   );
 
   await waitUntilExit();
