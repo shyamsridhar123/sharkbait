@@ -252,7 +252,7 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
         azure: {
           endpoint: state.azureEndpoint,
           deployment: state.azureDeployment,
-          apiVersion: "2024-10-21",
+          apiVersion: "2025-03-01-preview",
         },
         features: {
           beads: state.enableBeads,
@@ -280,7 +280,7 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
         "",
         `AZURE_OPENAI_ENDPOINT=${state.azureEndpoint}`,
         `AZURE_OPENAI_CODEX_DEPLOYMENT=${state.azureDeployment}`,
-        `AZURE_OPENAI_API_VERSION=2024-10-21`,
+        `AZURE_OPENAI_API_VERSION=2025-03-01-preview`,
       ];
 
       if (state.authMethod === "api-key" && state.azureKey) {
