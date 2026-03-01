@@ -7,6 +7,7 @@ import React from "react";
 import { render } from "ink";
 import { App } from "../ui/app";
 import { getWorkingDir } from "../utils/config";
+import { VERSION } from "../version";
 
 export interface ChatOptions {
   context?: string[];
@@ -29,7 +30,7 @@ export async function startChat(options: ChatOptions = {}): Promise<void> {
     React.createElement(App, {
       contextFiles: options.context,
       enableBeads: options.beads ?? true,
-      version: "0.1.0",
+      version: VERSION,
       workingDir,
     })
   );

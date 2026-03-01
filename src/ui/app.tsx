@@ -87,7 +87,7 @@ interface AppProps {
   workingDir?: string;  // Allow CLI to override working directory
 }
 
-export function App({ contextFiles: initialContextFiles, enableBeads: initialBeadsEnabled = true, version = "0.1.0", workingDir: cliWorkingDir }: AppProps): React.JSX.Element {
+export function App({ contextFiles: initialContextFiles, enableBeads: initialBeadsEnabled = true, version = "0.0.0", workingDir: cliWorkingDir }: AppProps): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

@@ -41,7 +41,7 @@ interface LogoProps {
   version?: string;
 }
 
-export function Logo({ variant = "full", version = "0.1.0" }: LogoProps): React.JSX.Element {
+export function Logo({ variant = "full", version = "0.0.0" }: LogoProps): React.JSX.Element {
   const logoText = variant === "inline" ? "" : SHARK_LOGO;
 
   return (
