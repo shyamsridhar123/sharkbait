@@ -6,6 +6,7 @@ import type { Tool } from "./registry";
 import { homedir } from "os";
 import { join } from "path";
 import { existsSync } from "fs";
+import { exec } from "../utils/runtime";
 
 // Find bd executable - check common locations
 function getBdPath(): string {
@@ -34,12 +35,8 @@ function isBeadsInitialized(cwd?: string): boolean {
 // Check if bd executable is available
 async function isBdInstalled(): Promise<boolean> {
   try {
-    const proc = Bun.spawn([BD_PATH, "--version"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    await proc.exited;
-    return true;
+    const result = await exec([BD_PATH, "--version"]);
+    return result.exitCode === 0;
   } catch {
     return false;
   }
@@ -110,24 +107,16 @@ export const beadsTools: Tool[] = [
       }
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-          cwd: process.cwd(),
-        });
+        const result = await exec(args, { cwd: process.cwd() });
         
-        const output = await new Response(proc.stdout).text();
-        const stderr = await new Response(proc.stderr).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
-          throw new Error(stderr || output || "Failed to initialize beads");
+        if (result.exitCode !== 0) {
+          throw new Error(result.stderr || result.stdout || "Failed to initialize beads");
         }
         
         return { 
           success: true, 
           message: "Beads initialized successfully.",
-          output: output.trim(),
+          output: result.stdout.trim(),
         };
       } catch (error) {
         return {
@@ -147,19 +136,13 @@ export const beadsTools: Tool[] = [
     },
     async execute() {
       try {
-        const proc = Bun.spawn([BD_PATH, "ready", "--json"], {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec([BD_PATH, "ready", "--json"]);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           throw new Error("Failed to get ready tasks");
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch (error) {
         // Return empty if beads is not available
         return { tasks: [], message: "Beads (bd) not available" };
@@ -200,38 +183,30 @@ export const beadsTools: Tool[] = [
       args.push("--json");
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-          cwd: process.cwd(),
-        });
+        const result = await exec(args, { cwd: process.cwd() });
         
-        const output = await new Response(proc.stdout).text();
-        const stderr = await new Response(proc.stderr).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           // Check for common errors and provide helpful messages
-          if (stderr.includes("no beads database found")) {
+          if (result.stderr.includes("no beads database found")) {
             return {
               success: false,
               error: "Beads database not found. Use beads_init to initialize.",
               hint: "Run beads_init first, then retry creating the task.",
             };
           }
-          throw new Error(stderr || "Failed to create task");
+          throw new Error(result.stderr || "Failed to create task");
         }
         
         // bd outputs JSON on stdout - extract the JSON object
         // The output may have warnings before the JSON, so find the JSON block
-        const jsonStart = output.indexOf('{');
-        const jsonEnd = output.lastIndexOf('}');
+        const jsonStart = result.stdout.indexOf('{');
+        const jsonEnd = result.stdout.lastIndexOf('}');
         if (jsonStart === -1 || jsonEnd === -1) {
-          throw new Error(`No JSON in output: ${output}`);
+          throw new Error(`No JSON in output: ${result.stdout}`);
         }
-        const jsonStr = output.substring(jsonStart, jsonEnd + 1);
-        const result = JSON.parse(jsonStr);
-        return { success: true, ...result };
+        const jsonStr = result.stdout.substring(jsonStart, jsonEnd + 1);
+        const parsed = JSON.parse(jsonStr);
+        return { success: true, ...parsed };
       } catch (error) {
         return {
           success: false,
@@ -253,19 +228,13 @@ export const beadsTools: Tool[] = [
     },
     async execute({ id }) {
       try {
-        const proc = Bun.spawn([BD_PATH, "show", id as string, "--json"], {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec([BD_PATH, "show", id as string, "--json"]);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           throw new Error(`Task not found: ${id}`);
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch (error) {
         throw new Error(`Failed to get task: ${error}`);
       }
@@ -287,14 +256,9 @@ export const beadsTools: Tool[] = [
       const msg = (message as string) || "Completed";
       
       try {
-        const proc = Bun.spawn([BD_PATH, "close", id as string, "-m", msg], {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec([BD_PATH, "close", id as string, "-m", msg]);
         
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           throw new Error(`Failed to complete task: ${id}`);
         }
         
@@ -318,14 +282,11 @@ export const beadsTools: Tool[] = [
     },
     async execute({ childId, parentId }) {
       try {
-        const proc = Bun.spawn(
-          [BD_PATH, "dep", "add", childId as string, parentId as string],
-          { stdout: "pipe", stderr: "pipe" }
+        const result = await exec(
+          [BD_PATH, "dep", "add", childId as string, parentId as string]
         );
         
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           throw new Error("Failed to add dependency");
         }
         
@@ -360,19 +321,13 @@ export const beadsTools: Tool[] = [
       }
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           return { tasks: [] };
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch {
         return { tasks: [], message: "Beads (bd) not available" };
       }

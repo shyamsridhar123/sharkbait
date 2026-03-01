@@ -3,6 +3,7 @@
  */
 
 import type { Tool } from "./registry";
+import { exec } from "../utils/runtime";
 
 export const githubTools: Tool[] = [
   {
@@ -33,20 +34,13 @@ export const githubTools: Tool[] = [
       args.push("--json", "number,url,title");
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
-          const stderr = await new Response(proc.stderr).text();
-          throw new Error(stderr || "Failed to create PR");
+        if (result.exitCode !== 0) {
+          throw new Error(result.stderr || "Failed to create PR");
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch (error) {
         throw new Error(`Failed to create PR: ${error}`);
       }
@@ -80,19 +74,13 @@ export const githubTools: Tool[] = [
       args.push("--json", "number,title,author,url,state,headRefName");
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           return { prs: [] };
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch {
         return { prs: [], message: "GitHub CLI (gh) not available" };
       }
@@ -125,16 +113,10 @@ export const githubTools: Tool[] = [
       }
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
-          const stderr = await new Response(proc.stderr).text();
-          throw new Error(stderr || "Failed to merge PR");
+        if (result.exitCode !== 0) {
+          throw new Error(result.stderr || "Failed to merge PR");
         }
         
         return { success: true, number, method: method || "squash" };
@@ -180,20 +162,13 @@ export const githubTools: Tool[] = [
       args.push("--json", "number,url,title");
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
-          const stderr = await new Response(proc.stderr).text();
-          throw new Error(stderr || "Failed to create issue");
+        if (result.exitCode !== 0) {
+          throw new Error(result.stderr || "Failed to create issue");
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch (error) {
         throw new Error(`Failed to create issue: ${error}`);
       }
@@ -219,19 +194,13 @@ export const githubTools: Tool[] = [
       args.push("--json", "status,conclusion,name,createdAt,url,headBranch");
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           return { runs: [] };
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch {
         return { runs: [], message: "GitHub CLI (gh) not available" };
       }
@@ -255,19 +224,13 @@ export const githubTools: Tool[] = [
       ];
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           throw new Error(`PR #${number} not found`);
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch (error) {
         throw new Error(`Failed to view PR: ${error}`);
       }
@@ -309,19 +272,13 @@ export const githubTools: Tool[] = [
       args.push("--json", "number,title,state,author,labels,url");
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
+        if (result.exitCode !== 0) {
           return { issues: [] };
         }
         
-        return JSON.parse(output);
+        return JSON.parse(result.stdout);
       } catch {
         return { issues: [], message: "GitHub CLI (gh) not available" };
       }

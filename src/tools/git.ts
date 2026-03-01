@@ -3,6 +3,7 @@
  */
 
 import type { Tool } from "./registry";
+import { exec } from "../utils/runtime";
 
 export const gitTools: Tool[] = [
   {
@@ -15,13 +16,8 @@ export const gitTools: Tool[] = [
     },
     async execute() {
       try {
-        const proc = Bun.spawn(["git", "status", "--porcelain"], {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        
-        const output = await new Response(proc.stdout).text();
-        return output.trim() || "Working tree clean";
+        const { stdout } = await exec(["git", "status", "--porcelain"]);
+        return stdout.trim() || "Working tree clean";
       } catch (error) {
         throw new Error("Not a git repository or git not installed");
       }
@@ -50,13 +46,8 @@ export const gitTools: Tool[] = [
       }
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        
-        const output = await new Response(proc.stdout).text();
-        return output.trim() || "No changes";
+        const { stdout } = await exec(args);
+        return stdout.trim() || "No changes";
       } catch (error) {
         throw new Error("Failed to get diff");
       }
@@ -77,27 +68,16 @@ export const gitTools: Tool[] = [
     async execute({ message, all }) {
       try {
         if (all) {
-          const addProc = Bun.spawn(["git", "add", "-A"], {
-            stdout: "pipe",
-            stderr: "pipe",
-          });
-          await addProc.exited;
+          await exec(["git", "add", "-A"]);
         }
         
-        const proc = Bun.spawn(["git", "commit", "-m", message as string], {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(["git", "commit", "-m", message as string]);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
-          const stderr = await new Response(proc.stderr).text();
-          throw new Error(stderr || "Commit failed");
+        if (result.exitCode !== 0) {
+          throw new Error(result.stderr || "Commit failed");
         }
         
-        return { success: true, message, output: output.trim() };
+        return { success: true, message, output: result.stdout.trim() };
       } catch (error) {
         throw new Error(`Commit failed: ${error}`);
       }
@@ -125,16 +105,10 @@ export const gitTools: Tool[] = [
       }
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const exitCode = await proc.exited;
-        const stderr = await new Response(proc.stderr).text();
-        
-        if (exitCode !== 0) {
-          throw new Error(stderr || "Push failed");
+        if (result.exitCode !== 0) {
+          throw new Error(result.stderr || "Push failed");
         }
         
         return { success: true, message: "Pushed successfully" };
@@ -183,24 +157,17 @@ export const gitTools: Tool[] = [
             throw new Error(`Unknown action: ${action}`);
         }
         
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+        const result = await exec(args);
         
-        const output = await new Response(proc.stdout).text();
-        const exitCode = await proc.exited;
-        
-        if (exitCode !== 0) {
-          const stderr = await new Response(proc.stderr).text();
-          throw new Error(stderr || "Branch operation failed");
+        if (result.exitCode !== 0) {
+          throw new Error(result.stderr || "Branch operation failed");
         }
         
         return { 
           success: true, 
           branch: name, 
           action, 
-          output: output.trim() 
+          output: result.stdout.trim() 
         };
       } catch (error) {
         throw new Error(`Branch operation failed: ${error}`);
@@ -230,13 +197,8 @@ export const gitTools: Tool[] = [
       }
       
       try {
-        const proc = Bun.spawn(args, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        
-        const output = await new Response(proc.stdout).text();
-        return output.trim();
+        const { stdout } = await exec(args);
+        return stdout.trim();
       } catch (error) {
         throw new Error("Failed to get log");
       }

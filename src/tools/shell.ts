@@ -7,6 +7,7 @@ import type { Tool } from "./registry";
 import { classifyCommand, type CommandSafety } from "../utils/security";
 import { ToolError } from "../utils/errors";
 import { getErrorMessage } from "../utils/security";
+import { exec, spawnBackground } from "../utils/runtime";
 
 export const shellTools: Tool[] = [
   {
@@ -52,14 +53,12 @@ export const shellTools: Tool[] = [
         const shell = process.platform === "win32" ? "cmd" : "sh";
         const shellArg = process.platform === "win32" ? "/c" : "-c";
 
-        const proc = Bun.spawn([shell, shellArg, cmd], {
+        const pid = spawnBackground([shell, shellArg, cmd], {
           cwd: workingDir,
-          stdout: "pipe",
-          stderr: "pipe",
         });
 
         return {
-          pid: proc.pid,
+          pid,
           message: "Started in background",
         };
       }
@@ -68,12 +67,6 @@ export const shellTools: Tool[] = [
         const shell = process.platform === "win32" ? "cmd" : "sh";
         const shellArg = process.platform === "win32" ? "/c" : "-c";
 
-        const proc = Bun.spawn([shell, shellArg, cmd], {
-          cwd: workingDir,
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () => reject(new Error(`Command timed out after ${timeoutMs}ms`)),
@@ -81,12 +74,9 @@ export const shellTools: Tool[] = [
           );
         });
 
-        const outputPromise = (async () => {
-          const stdout = await new Response(proc.stdout).text();
-          const stderr = await new Response(proc.stderr).text();
-          const exitCode = await proc.exited;
-          return { stdout, stderr, exitCode };
-        })();
+        const outputPromise = exec([shell, shellArg, cmd], {
+          cwd: workingDir,
+        });
 
         const { stdout, stderr, exitCode } = await Promise.race([
           outputPromise,
@@ -167,12 +157,7 @@ export const shellTools: Tool[] = [
       }
 
       try {
-        const proc = Bun.spawn(cmd, {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-
-        await proc.exited;
+        await exec(cmd);
         return { success: true, message: `Opened ${target}` };
       } catch (error) {
         return { success: false, error: getErrorMessage(error) };

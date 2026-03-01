@@ -9,6 +9,7 @@ import type { Tool } from "./registry";
 import { validatePath } from "../utils/security";
 import { ToolError, SecurityError } from "../utils/errors";
 import { getErrorMessage } from "../utils/security";
+import { exec, readTextFile, writeTextFile, fileExists } from "../utils/runtime";
 
 /**
  * Enforce path safety or throw.
@@ -38,13 +39,11 @@ export const fileTools: Tool[] = [
       const filePath = path as string;
       enforcePath(filePath, "read");
 
-      const file = Bun.file(filePath);
-
-      if (!(await file.exists())) {
+      if (!fileExists(filePath)) {
         throw new ToolError(`File not found: ${filePath}`, "read_file");
       }
 
-      const content = await file.text();
+      const content = await readTextFile(filePath);
 
       if (startLine !== undefined && endLine !== undefined) {
         const lines = content.split("\n");
@@ -81,7 +80,7 @@ export const fileTools: Tool[] = [
         await mkdir(dir, { recursive: true });
       }
 
-      await Bun.write(filePath, content as string);
+      await writeTextFile(filePath, content as string);
       return { success: true, path: filePath };
     },
   },
@@ -102,13 +101,11 @@ export const fileTools: Tool[] = [
       const filePath = path as string;
       enforcePath(filePath, "write");
 
-      const file = Bun.file(filePath);
-
-      if (!(await file.exists())) {
+      if (!fileExists(filePath)) {
         throw new ToolError(`File not found: ${filePath}`, "edit_file");
       }
 
-      const content = await file.text();
+      const content = await readTextFile(filePath);
       const oldStr = oldString as string;
 
       if (!content.includes(oldStr)) {
@@ -127,7 +124,7 @@ export const fileTools: Tool[] = [
       }
 
       const newContent = content.replace(oldStr, newString as string);
-      await Bun.write(filePath, newContent);
+      await writeTextFile(filePath, newContent);
 
       return { success: true, path: filePath };
     },
@@ -223,9 +220,8 @@ export const fileTools: Tool[] = [
           "-m",
           String(limit),
         ];
-        const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
-        const output = await new Response(proc.stdout).text();
-        return output;
+        const result = await exec(args);
+        return result.stdout;
       } catch {
         try {
           const args = [
@@ -236,12 +232,8 @@ export const fileTools: Tool[] = [
             "--include",
             glob,
           ];
-          const proc = Bun.spawn(args, {
-            stdout: "pipe",
-            stderr: "pipe",
-          });
-          const output = await new Response(proc.stdout).text();
-          return output;
+          const result = await exec(args);
+          return result.stdout;
         } catch {
           return "No matches found";
         }
@@ -287,9 +279,8 @@ export const fileTools: Tool[] = [
       }
 
       try {
-        const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
-        const output = await new Response(proc.stdout).text();
-        return output || "No matches found";
+        const result = await exec(args);
+        return result.stdout || "No matches found";
       } catch {
         return "Search failed - ripgrep may not be installed";
       }

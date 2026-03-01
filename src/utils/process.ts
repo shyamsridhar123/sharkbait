@@ -1,9 +1,9 @@
 /**
  * Process Utilities - Shared subprocess execution to eliminate boilerplate
- * Replaces 27+ instances of Bun.spawn + stdout + exit pattern
  */
 
 import { getErrorMessage } from "./security";
+import { exec } from "./runtime";
 
 export interface ProcessResult {
   stdout: string;
@@ -13,7 +13,6 @@ export interface ProcessResult {
 
 /**
  * Run a subprocess and return structured output.
- * Replaces the repetitive Bun.spawn + new Response pattern.
  */
 export async function runProcess(
   args: string[],
@@ -26,13 +25,6 @@ export async function runProcess(
   const { cwd, timeout = 30000, stdin } = options;
 
   try {
-    const proc = Bun.spawn(args, {
-      cwd,
-      stdout: "pipe",
-      stderr: "pipe",
-      stdin: stdin ? new TextEncoder().encode(stdin) : undefined,
-    });
-
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(
         () => reject(new Error(`Process timed out after ${timeout}ms`)),
@@ -40,12 +32,11 @@ export async function runProcess(
       );
     });
 
-    const outputPromise = (async () => {
-      const stdout = await new Response(proc.stdout).text();
-      const stderr = await new Response(proc.stderr).text();
-      const exitCode = await proc.exited;
-      return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
-    })();
+    const outputPromise = exec(args, { cwd, stdin }).then((r) => ({
+      stdout: r.stdout.trim(),
+      stderr: r.stderr.trim(),
+      exitCode: r.exitCode,
+    }));
 
     return await Promise.race([outputPromise, timeoutPromise]);
   } catch (error) {

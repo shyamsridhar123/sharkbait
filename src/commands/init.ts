@@ -2,7 +2,7 @@
  * Init Command - Initialize Sharkbait in a project
  */
 
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, writeFile, readFile as fsReadFile } from "fs/promises";
 import { join } from "path";
 import { log } from "../utils/logger";
 
@@ -55,9 +55,9 @@ SHARKBAIT_CONFIRM_DESTRUCTIVE=true
   // Update .gitignore if it exists
   const gitignorePath = join(cwd, ".gitignore");
   try {
-    const gitignoreContent = await Bun.file(gitignorePath).text();
+    const gitignoreContent = await fsReadFile(gitignorePath, "utf-8");
     if (!gitignoreContent.includes(".env")) {
-      await Bun.write(gitignorePath, gitignoreContent + "\n# Sharkbait\n.env\n");
+      await writeFile(gitignorePath, gitignoreContent + "\n# Sharkbait\n.env\n");
       log.success("Updated .gitignore");
     }
   } catch {
