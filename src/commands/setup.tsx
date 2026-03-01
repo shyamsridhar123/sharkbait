@@ -307,11 +307,39 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
         if (!bdVersion) {
           setBeadsInstallStatus("installing");
           try {
-            // On Linux/macOS, use the official install script (installs native binary)
-            // On Windows, use npm (the install script is bash-only)
             if (process.platform === "win32") {
-              execSync("npm install -g @beads/bd", { stdio: "ignore", timeout: 120000 });
+              // npm postinstall is broken on Windows — download binary from GitHub releases directly
+              const beadsVer = "0.57.0";
+              const beadsDir = join(homedir(), "AppData", "Local", "beads");
+              const bdExe = join(beadsDir, "bd.exe");
+              const zipUrl = `https://github.com/steveyegge/beads/releases/download/v${beadsVer}/beads_${beadsVer}_windows_amd64.zip`;
+              const zipPath = join(beadsDir, "beads.zip");
+
+              execSync(`mkdir "${beadsDir}" 2>nul & echo ok`, { stdio: "ignore", shell: "cmd.exe" });
+              execSync(`curl -fsSL -o "${zipPath}" "${zipUrl}"`, { stdio: "ignore", timeout: 120000 });
+              execSync(`tar -xf "${zipPath}" -C "${beadsDir}"`, { stdio: "ignore", timeout: 30000 });
+              // Clean up zip
+              try { execSync(`del "${zipPath}"`, { stdio: "ignore", shell: "cmd.exe" }); } catch {}
+
+              // Add to user PATH if not already there
+              if (existsSync(bdExe)) {
+                try {
+                  const currentPath = execSync(
+                    `powershell -Command "[Environment]::GetEnvironmentVariable('PATH','User')"`,
+                    { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }
+                  ).trim();
+                  if (!currentPath.toLowerCase().includes(beadsDir.toLowerCase())) {
+                    execSync(
+                      `powershell -Command "[Environment]::SetEnvironmentVariable('PATH','${beadsDir};' + [Environment]::GetEnvironmentVariable('PATH','User'),'User')"`,
+                      { stdio: "ignore" }
+                    );
+                  }
+                } catch {}
+                // Use direct path to verify since PATH update won't take effect in this process
+                bdVersion = execSync(`"${bdExe}" --version`, { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+              }
             } else {
+              // Linux/macOS: use the official install script (installs native binary)
               try {
                 execSync(
                   "curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash",
@@ -321,9 +349,9 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
                 // Fallback to npm if curl/install script fails
                 execSync("npm install -g @beads/bd", { stdio: "ignore", timeout: 120000 });
               }
+              bdVersion = execSync("bd --version", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
             }
             // Verify installation
-            bdVersion = execSync("bd --version", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
             if (bdVersion) {
               setBeadsVersion(bdVersion);
               setBeadsInstallStatus("installed");
