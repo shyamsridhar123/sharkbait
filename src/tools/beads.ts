@@ -34,6 +34,19 @@ function getBdPath(): string {
 
 const BD_PATH = getBdPath();
 
+// Module-level flag: once we detect that dolt is unreachable and --no-db works,
+// automatically add --no-db to all subsequent bd commands
+let forceNoDb = false;
+
+// Helper: build bd command args, auto-appending --no-db when needed
+function bdArgs(...args: string[]): string[] {
+  const cmd = [BD_PATH, ...args];
+  if (forceNoDb && !cmd.includes("--no-db")) {
+    cmd.push("--no-db");
+  }
+  return cmd;
+}
+
 // Check if .beads directory exists in current directory
 function hasBeadsDir(cwd?: string): boolean {
   const dir = cwd || process.cwd();
@@ -41,19 +54,30 @@ function hasBeadsDir(cwd?: string): boolean {
 }
 
 // Check if beads is actually functional (dolt reachable OR no-db mode)
-async function isBeadsFunctional(): Promise<{ functional: boolean; error?: string }> {
+// Returns whether --no-db flag was needed so callers can use it too
+async function isBeadsFunctional(): Promise<{ functional: boolean; useNoDb?: boolean; error?: string }> {
   if (!hasBeadsDir()) {
     return { functional: false, error: "No .beads directory found" };
   }
   try {
     const result = await exec([BD_PATH, "list", "--json"], { cwd: process.cwd() });
     if (result.exitCode === 0) {
-      return { functional: true };
+      return { functional: true, useNoDb: false };
     }
-    return { functional: false, error: result.stderr || "bd list failed" };
-  } catch (err) {
-    return { functional: false, error: err instanceof Error ? err.message : String(err) };
+  } catch {}
+  
+  // Dolt connection failed — try --no-db fallback (reads from JSONL files)
+  if (bdSupportsNoDb()) {
+    try {
+      const result = await exec([BD_PATH, "list", "--json", "--no-db"], { cwd: process.cwd() });
+      if (result.exitCode === 0) {
+        forceNoDb = true;  // Latch: use --no-db for all future commands
+        return { functional: true, useNoDb: true };
+      }
+    } catch {}
   }
+  
+  return { functional: false, error: "bd list failed (dolt unreachable and --no-db fallback failed)" };
 }
 
 // Check if bd executable is available
@@ -188,16 +212,19 @@ export const beadsTools: Tool[] = [
       }
       
       // Actually check if beads is functional (dolt reachable or no-db mode)
-      const { functional, error } = await isBeadsFunctional();
+      const { functional, useNoDb, error } = await isBeadsFunctional();
       
       return {
         installed: true,
         initialized: dirExists,
         functional,
         ready: functional,
+        mode: useNoDb ? "no-db" : "dolt",
         message: functional
-          ? "Beads is ready to use."
-          : `Beads directory exists but is not functional: ${error}. Try beads_init to reinitialize, or proceed without beads.`,
+          ? useNoDb
+            ? "Beads is ready (using --no-db fallback, dolt server unreachable)."
+            : "Beads is ready to use."
+          : `Beads directory exists but is not functional: ${error}. Write operations (beads_create, beads_done) will not work. However, if the user asks about their beads/tasks, still try beads_list — it may be able to read local task data. For new tasks, proceed without beads.`,
         bdPath: BD_PATH,
         proceedWithoutBeads: !functional,
       };
@@ -313,7 +340,7 @@ export const beadsTools: Tool[] = [
     },
     async execute() {
       try {
-        const result = await exec([BD_PATH, "ready", "--json"]);
+        const result = await exec(bdArgs("ready", "--json"));
         
         if (result.exitCode !== 0) {
           return { tasks: [], message: "Beads not functional. Proceed without beads.", proceedWithoutBeads: true };
@@ -348,7 +375,7 @@ export const beadsTools: Tool[] = [
         };
       }
       
-      const args = [BD_PATH, "create", title as string];
+      const args = bdArgs("create", title as string);
       
       if (priority !== undefined) {
         args.push("-p", String(priority));
@@ -405,7 +432,7 @@ export const beadsTools: Tool[] = [
     },
     async execute({ id }) {
       try {
-        const result = await exec([BD_PATH, "show", id as string, "--json"]);
+        const result = await exec(bdArgs("show", id as string, "--json"));
         
         if (result.exitCode !== 0) {
           return { error: `Task not found: ${id}`, proceedWithoutBeads: true };
@@ -433,7 +460,7 @@ export const beadsTools: Tool[] = [
       const msg = (message as string) || "Completed";
       
       try {
-        const result = await exec([BD_PATH, "close", id as string, "-m", msg]);
+        const result = await exec(bdArgs("close", id as string, "-m", msg));
         
         if (result.exitCode !== 0) {
           return { success: false, error: `Failed to complete task: ${id}`, proceedWithoutBeads: true };
@@ -460,7 +487,7 @@ export const beadsTools: Tool[] = [
     async execute({ childId, parentId }) {
       try {
         const result = await exec(
-          [BD_PATH, "dep", "add", childId as string, parentId as string]
+          bdArgs("dep", "add", childId as string, parentId as string)
         );
         
         if (result.exitCode !== 0) {
@@ -476,7 +503,7 @@ export const beadsTools: Tool[] = [
 
   {
     name: "beads_list",
-    description: "List all tasks",
+    description: "List all tasks. ALWAYS try this when the user asks about their beads/tasks, even if beads_status reported non-functional — task data may still be readable from local files.",
     parameters: {
       type: "object",
       properties: {
@@ -489,7 +516,8 @@ export const beadsTools: Tool[] = [
       required: [],
     },
     async execute({ status }) {
-      const args = [BD_PATH, "list", "--json"];
+      // Try bd list first
+      const args = bdArgs("list", "--json");
       
       if (status === "all") {
         args.push("--all");
@@ -500,13 +528,59 @@ export const beadsTools: Tool[] = [
       try {
         const result = await exec(args);
         
-        if (result.exitCode !== 0) {
-          return { tasks: [] };
+        if (result.exitCode === 0) {
+          return JSON.parse(result.stdout);
         }
-        
-        return JSON.parse(result.stdout);
+      } catch {}
+
+      // If --no-db wasn't already tried, try it now
+      if (!forceNoDb && bdSupportsNoDb()) {
+        try {
+          const noDbArgs = [...args, "--no-db"];
+          const result = await exec(noDbArgs);
+          if (result.exitCode === 0) {
+            forceNoDb = true;
+            return JSON.parse(result.stdout);
+          }
+        } catch {}
+      }
+
+      // Fallback: try reading JSONL files directly from .beads/
+      try {
+        const { readFileSync, readdirSync } = await import("fs");
+        const beadsDir = join(process.cwd(), ".beads");
+        if (!existsSync(beadsDir)) {
+          return { tasks: [], message: "No .beads directory found. Beads is not initialized here.", proceedWithoutBeads: true };
+        }
+
+        // Look for task JSONL files in .beads/
+        const tasks: unknown[] = [];
+        const scanDirs = [beadsDir, join(beadsDir, "tasks"), join(beadsDir, "data")];
+        for (const dir of scanDirs) {
+          if (!existsSync(dir)) continue;
+          const files = readdirSync(dir).filter(f => f.endsWith(".jsonl") || f.endsWith(".json"));
+          for (const file of files) {
+            try {
+              const content = readFileSync(join(dir, file), "utf-8");
+              // JSONL: one JSON object per line
+              for (const line of content.split("\n")) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                try {
+                  tasks.push(JSON.parse(trimmed));
+                } catch {}
+              }
+            } catch {}
+          }
+        }
+
+        if (tasks.length > 0) {
+          return { tasks, source: "local-files", message: `Read ${tasks.length} task record(s) from local .beads files (dolt unavailable).` };
+        }
+
+        return { tasks: [], message: "No task data found in .beads directory. Beads may need dolt to store tasks.", proceedWithoutBeads: true };
       } catch {
-        return { tasks: [], message: "Beads (bd) not available. Proceed without beads.", proceedWithoutBeads: true };
+        return { tasks: [], message: "Beads (bd) not available and could not read local files. Proceed without beads.", proceedWithoutBeads: true };
       }
     },
   },

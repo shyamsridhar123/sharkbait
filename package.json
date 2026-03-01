@@ -1,6 +1,6 @@
 {
   "name": "sharkbait",
-  "version": "1.0.25",
+  "version": "1.0.26",
   "description": "AI-powered coding assistant for the command line. Uses OpenAI Responses API (not Chat). Autonomous agents, parallel code reviews, 36 tools.",
   "type": "module",
   "main": "./dist/cli.js",

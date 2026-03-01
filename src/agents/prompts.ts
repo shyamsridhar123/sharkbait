@@ -24,13 +24,16 @@ When the user asks to install Beads, use the \`beads_install\` tool. NEVER use r
 To check status, use \`beads_status\`. To initialize in a project, use \`beads_init\`.
 
 **CRITICAL — Beads Failure Policy:**
-If ANY beads tool fails (beads_status, beads_init, beads_create, beads_done, etc.):
-- Do NOT retry the same beads operation more than ONCE
+If beads WRITE tools fail (beads_create, beads_done, beads_init):
+- Do NOT retry the same beads write operation more than ONCE
 - Do NOT try to troubleshoot or fix beads (e.g., installing dolt, restarting services, running bd commands via run_command)
 - IMMEDIATELY proceed with the user's actual task
 - Inform the user that beads is unavailable and their task will proceed without task tracking
 - The user's task is ALWAYS more important than beads working
-If a beads tool returns \`proceedWithoutBeads: true\`, that is your signal to stop all beads operations and focus on the task.
+If a beads tool returns \`proceedWithoutBeads: true\`, that is your signal to stop beads WRITE operations and focus on the task.
+
+**Exception for READ operations:**
+When the user explicitly asks about their beads, tasks, or previous work (e.g., "what's on my beads", "show my tasks", "list beads"), ALWAYS try beads_list even if beads_status reported non-functional. The list tool has fallback logic to read local task files.
 `;
 
 /**

@@ -24,8 +24,12 @@ const STALL_THRESHOLD = 3;
 const MAX_REPLANS = 2;
 const MAX_ITERATIONS = 50;
 const MAX_MESSAGES = 200;
-const BEADS_FAIL_LIMIT = 2;  // After 2 beads failures, inject "stop trying beads"
+const BEADS_FAIL_LIMIT = 2;  // After 2 beads write failures, inject "stop trying beads"
 
+// Only write operations count toward the circuit breaker — reads should always be attempted
+const BEADS_WRITE_TOOLS = new Set([
+  "beads_init", "beads_create", "beads_done", "beads_add_dependency",
+]);
 const BEADS_TOOL_NAMES = new Set([
   "beads_status", "beads_init", "beads_create", "beads_ready",
   "beads_show", "beads_done", "beads_list", "beads_add_dependency",
@@ -298,13 +302,14 @@ BEADS ARE YOUR MEMORY SYSTEM:
 - Use beads_done when you've completed the work
 
 CRITICAL — BEADS FAILURE POLICY:
-If ANY beads tool fails or returns proceedWithoutBeads:
-- Do NOT retry the same beads operation more than ONCE
+If beads WRITE tools fail (beads_create, beads_done, beads_init) or return proceedWithoutBeads:
+- Do NOT retry the same beads write operation more than ONCE
 - Do NOT try to troubleshoot, fix, or debug beads problems
 - Do NOT install dolt, restart services, or run bd commands via run_command
 - IMMEDIATELY proceed with the user's actual task
 - Inform the user beads is unavailable — their task will proceed without tracking
 - The user's task is ALWAYS more important than beads
+Exception: When the user EXPLICITLY asks about beads/tasks ("what's on my beads", "list tasks"), ALWAYS try beads_list — it can read local files even when dolt is down.
 
 Guidelines:
 1. Always read files before editing
