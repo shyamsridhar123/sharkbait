@@ -6,10 +6,11 @@
 import React, { useState, useEffect } from "react";
 import { render, Box, Text, useInput, useApp } from "ink";
 import TextInput from "ink-text-input";
-import { writeFile, readFile, mkdir } from "fs/promises";
-import { join } from "path";
+import { writeFile, readFile, mkdir, stat } from "fs/promises";
+import { join, resolve } from "path";
 import { homedir } from "os";
 import { existsSync } from "fs";
+import { execSync } from "child_process";
 import { colors, icons } from "../ui/theme";
 import { Logo } from "../ui/logo";
 import { VERSION } from "../version";
@@ -35,7 +36,11 @@ interface SetupState {
   confirmDestructive: boolean;
 }
 
-function SetupWizard(): React.JSX.Element {
+interface SetupWizardProps {
+  onComplete?: () => void;
+}
+
+function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.Element {
   const { exit } = useApp();
   const [step, setStep] = useState<SetupStep>("welcome");
   const [state, setState] = useState<SetupState>({
@@ -103,10 +108,22 @@ function SetupWizard(): React.JSX.Element {
 
     if (step === "auth-method") {
       if (input === "1") {
-        setState(prev => ({ ...prev, authMethod: "azure-identity" }));
-        setStep("azure-deployment");
-        setInputValue(state.azureDeployment);
+        // Verify Azure CLI login
+        let azLoggedIn = false;
+        try {
+          execSync("az account show", { stdio: "ignore" });
+          azLoggedIn = true;
+        } catch {}
+        if (!azLoggedIn) {
+          setError("Not logged into Azure CLI. Run 'az login' first, or choose API key.");
+        } else {
+          setError(null);
+          setState(prev => ({ ...prev, authMethod: "azure-identity" }));
+          setStep("azure-deployment");
+          setInputValue(state.azureDeployment);
+        }
       } else if (input === "2") {
+        setError(null);
         setState(prev => ({ ...prev, authMethod: "api-key" }));
         setStep("azure-key");
         setInputValue("");
@@ -135,23 +152,36 @@ function SetupWizard(): React.JSX.Element {
     }
 
     if (step === "complete" && key.return) {
+      onComplete?.();
       exit();
       return;
     }
   });
 
-  function handleInputSubmit(value: string): void {
+  async function handleInputSubmit(value: string): Promise<void> {
     setError(null);
 
     switch (step) {
-      case "azure-endpoint":
+      case "azure-endpoint": {
         if (!value.startsWith("https://")) {
           setError("Endpoint must start with https://");
+          return;
+        }
+        // Validate URL format
+        try {
+          const url = new URL(value);
+          if (!url.hostname.includes(".")) {
+            setError("Invalid endpoint URL — must be a valid hostname");
+            return;
+          }
+        } catch {
+          setError("Invalid URL format");
           return;
         }
         setState(prev => ({ ...prev, azureEndpoint: value }));
         setStep("auth-method");
         break;
+      }
 
       case "azure-key":
         if (!value || value === "********") {
@@ -160,22 +190,53 @@ function SetupWizard(): React.JSX.Element {
             return;
           }
         } else {
-          setState(prev => ({ ...prev, azureKey: value }));
+          const trimmed = value.trim();
+          if (trimmed.length < 10) {
+            setError("API key seems too short — check your key");
+            return;
+          }
+          setState(prev => ({ ...prev, azureKey: trimmed }));
         }
         setStep("azure-deployment");
         setInputValue(state.azureDeployment);
         break;
 
-      case "azure-deployment":
-        setState(prev => ({ ...prev, azureDeployment: value || "gpt-codex-5.2" }));
+      case "azure-deployment": {
+        const deployment = value.trim() || "gpt-codex-5.2";
+        if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(deployment)) {
+          setError("Deployment name can only contain letters, numbers, dots, hyphens, underscores");
+          return;
+        }
+        setState(prev => ({ ...prev, azureDeployment: deployment }));
         setStep("working-dir");
         setInputValue(state.defaultWorkingDir);
         break;
+      }
 
-      case "working-dir":
-        setState(prev => ({ ...prev, defaultWorkingDir: value }));
+      case "working-dir": {
+        if (value.trim()) {
+          const resolved = resolve(value.trim().replace(/^~/, homedir()));
+          if (!existsSync(resolved)) {
+            setError(`Directory not found: ${resolved}`);
+            return;
+          }
+          try {
+            const s = await stat(resolved);
+            if (!s.isDirectory()) {
+              setError(`Not a directory: ${resolved}`);
+              return;
+            }
+          } catch {
+            setError(`Cannot access: ${resolved}`);
+            return;
+          }
+          setState(prev => ({ ...prev, defaultWorkingDir: resolved }));
+        } else {
+          setState(prev => ({ ...prev, defaultWorkingDir: "" }));
+        }
         setStep("features");
         break;
+      }
     }
   }
 
@@ -317,6 +378,11 @@ function SetupWizard(): React.JSX.Element {
               <Text color={colors.textDim}> - Manual key entry (fallback)</Text>
             </Text>
           </Box>
+          {error && (
+            <Box marginTop={1}>
+              <Text color={colors.error}>{icons.error} {error}</Text>
+            </Box>
+          )}
           <Box marginTop={1}>
             <Text color={colors.textDim}>
               Press <Text color={colors.success}>1</Text> or <Text color={colors.success}>2</Text> to select
@@ -501,13 +567,9 @@ function SetupWizard(): React.JSX.Element {
               </>
             )}
           </Box>
+
           <Box marginTop={1}>
-            <Text color={colors.textMuted}>
-              Run <Text color={colors.primary}>sharkbait</Text> to start chatting!
-            </Text>
-          </Box>
-          <Box marginTop={1}>
-            <Text color={colors.textDim}>Press Enter to exit</Text>
+            <Text color={colors.textDim}>Press Enter to start coding...</Text>
           </Box>
         </Box>
       )}
@@ -528,7 +590,16 @@ function SetupWizard(): React.JSX.Element {
   );
 }
 
-export async function runSetup(): Promise<void> {
-  const { waitUntilExit } = render(React.createElement(SetupWizard));
+export async function runSetup(): Promise<boolean> {
+  let setupCompleted = false;
+
+  function SetupWizardWrapper(): React.JSX.Element {
+    return React.createElement(SetupWizardWithCallback, {
+      onComplete: () => { setupCompleted = true; },
+    });
+  }
+
+  const { waitUntilExit } = render(React.createElement(SetupWizardWrapper));
   await waitUntilExit();
+  return setupCompleted;
 }

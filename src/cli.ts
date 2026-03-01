@@ -23,7 +23,10 @@ const args = process.argv.slice(2);
 if (args.length === 0) {
   const configExists = existsSync(join(homedir(), ".sharkbait", "config.json"));
   if (!configExists) {
-    await runSetup();
+    const completed = await runSetup();
+    if (completed) {
+      await startChat({});
+    }
   } else {
     await startChat({});
   }
@@ -66,7 +69,7 @@ program
 program
   .command("setup")
   .description("Interactive setup wizard for configuring Sharkbait")
-  .action(runSetup);
+  .action(async () => { await runSetup(); });
 
 program
   .command("review <file>")
