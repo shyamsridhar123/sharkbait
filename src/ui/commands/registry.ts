@@ -132,7 +132,7 @@ export const commands: SlashCommand[] = [
     handler: (args, ctx) => {
       const availableModels = [
         "gpt-5.1-codex-max",
-        "gpt-codex-5.2",
+        "gpt-5.3-codex",
         "gpt-4-turbo",
         "gpt-4o",
         "gpt-4o-mini",

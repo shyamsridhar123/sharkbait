@@ -47,7 +47,7 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
     azureEndpoint: "",
     authMethod: "azure-identity",
     azureKey: "",
-    azureDeployment: "gpt-codex-5.2",
+    azureDeployment: "gpt-5.3-codex",
     defaultWorkingDir: "",
     enableBeads: true,
     confirmDestructive: true,
@@ -202,7 +202,7 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
         break;
 
       case "azure-deployment": {
-        const deployment = value.trim() || "gpt-codex-5.2";
+        const deployment = value.trim() || "gpt-5.3-codex";
         if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(deployment)) {
           setError("Deployment name can only contain letters, numbers, dots, hyphens, underscores");
           return;
@@ -425,7 +425,7 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
             Enter your Azure OpenAI model deployment name
           </Text>
           <Text color={colors.textDim} italic>
-            Default: gpt-codex-5.2
+            Default: gpt-5.3-codex
           </Text>
           <Box marginTop={1}>
             <Text color={colors.primary}>{">"} </Text>
@@ -433,7 +433,7 @@ function SetupWizardWithCallback({ onComplete }: SetupWizardProps): React.JSX.El
               value={inputValue}
               onChange={setInputValue}
               onSubmit={handleInputSubmit}
-              placeholder="gpt-codex-5.2"
+              placeholder="gpt-5.3-codex"
             />
           </Box>
         </Box>

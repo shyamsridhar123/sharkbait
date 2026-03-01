@@ -102,7 +102,7 @@ export function loadConfig(): Config {
   let config: Config = {
     azure: {
       endpoint: "",
-      deployment: "gpt-codex-5.2",
+      deployment: "gpt-5.3-codex",
       apiVersion: "2025-03-01-preview",
     },
     features: {
