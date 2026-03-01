@@ -11,7 +11,7 @@ import { ConfigError } from "./errors";
 export interface Config {
   azure: {
     endpoint: string;
-    apiKey: string;
+    apiKey?: string;          // Optional fallback — Azure Identity is default
     deployment: string;
     apiVersion: string;
   };
@@ -102,7 +102,6 @@ export function loadConfig(): Config {
   let config: Config = {
     azure: {
       endpoint: "",
-      apiKey: "",
       deployment: "gpt-codex-5.2",
       apiVersion: "2025-03-01-preview",
     },
@@ -146,6 +145,9 @@ export function loadConfig(): Config {
   }
   if (process.env["AZURE_OPENAI_API_KEY"]) {
     config.azure.apiKey = process.env["AZURE_OPENAI_API_KEY"];
+  } else {
+    // No API key → Azure Identity (DefaultAzureCredential) will be used
+    delete config.azure.apiKey;
   }
   if (process.env["AZURE_OPENAI_CODEX_DEPLOYMENT"]) {
     config.azure.deployment = process.env["AZURE_OPENAI_CODEX_DEPLOYMENT"];
@@ -212,11 +214,8 @@ export function validateConfig(config: Config): void {
       "Azure OpenAI endpoint is required. Set AZURE_OPENAI_ENDPOINT environment variable."
     );
   }
-  // apiKey is no longer required — Azure Identity is used when absent.
-  // Log the auth method for debugging.
-  if (!config.azure.apiKey) {
-    // Will use DefaultAzureCredential at runtime
-  }
+  // Azure Identity (DefaultAzureCredential) is the default auth method.
+  // API key is only used as a fallback when explicitly configured.
 }
 
 export function clearConfigCache(): void {

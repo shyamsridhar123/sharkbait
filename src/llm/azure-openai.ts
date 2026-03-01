@@ -2,10 +2,10 @@
  * Azure OpenAI Client - Wrapper for Azure OpenAI Responses API with streaming support
  *
  * Authentication strategy (in order):
- * 1. If AZURE_OPENAI_API_KEY is set → use API key auth (legacy, backward compat)
- * 2. Otherwise → use Azure Identity (DefaultAzureCredential)
+ * 1. Default → Azure Identity (DefaultAzureCredential)
  *    - Supports: managed identity, Azure CLI, VS Code, environment creds
  *    - Token refresh/caching handled by @azure/identity internally
+ * 2. Fallback → API key auth (if AZURE_OPENAI_API_KEY is explicitly set)
  */
 
 import { AzureOpenAI } from "openai";
@@ -19,7 +19,7 @@ const AZURE_COGNITIVE_SCOPE = "https://cognitiveservices.azure.com/.default";
 
 export interface LLMConfig {
   endpoint: string;
-  apiKey?: string;           // Optional — when absent, Azure Identity is used
+  apiKey?: string;           // Optional fallback — Azure Identity is used by default
   deployment: string;
   apiVersion: string;
 }
@@ -35,14 +35,16 @@ export class AzureOpenAIClient {
     }
 
     if (config.apiKey) {
+      // Fallback: use API key when explicitly provided
       this.client = new AzureOpenAI({
         endpoint: config.endpoint,
         apiKey: config.apiKey,
         apiVersion: config.apiVersion,
       });
       this.authMethod = "api-key";
-      log.info("Azure OpenAI client initialized with API key auth");
+      log.info("Azure OpenAI client initialized with API key auth (fallback)");
     } else {
+      // Default: Azure Identity (DefaultAzureCredential)
       const credential = new DefaultAzureCredential();
       const tokenProvider = async (): Promise<string> => {
         const tokenResponse = await credential.getToken(AZURE_COGNITIVE_SCOPE);
