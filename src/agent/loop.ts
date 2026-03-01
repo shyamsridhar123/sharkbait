@@ -175,29 +175,37 @@ export class AgentLoop {
         tool_calls: toolCalls,
       });
 
+      // Parse args and emit tool_start BEFORE execution so UI shows "running"
+      const parsedArgs: Record<string, unknown>[] = [];
+      for (let i = 0; i < toolCalls.length; i++) {
+        const call = toolCalls[i]!;
+        let args: Record<string, unknown>;
+        try {
+          args = JSON.parse(call.function.arguments);
+        } catch (parseErr) {
+          args = {};
+        }
+        parsedArgs.push(args);
+        yield { type: "tool_start", name: call.function.name, args };
+      }
+
       const toolResults = await Promise.allSettled(
-        toolCalls.map(async (call) => {
-          let args: Record<string, unknown>;
-          try {
-            args = JSON.parse(call.function.arguments);
-          } catch (parseErr) {
-            throw new Error(`Invalid tool arguments for ${call.function.name}: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
-          }
+        toolCalls.map(async (call, i) => {
           return {
             call,
-            args,
-            result: await this.tools.execute(call.function.name, args),
+            args: parsedArgs[i]!,
+            result: await this.tools.execute(call.function.name, parsedArgs[i]!),
           };
         })
       );
 
+      // Emit results — tools already showing as "running" in UI
       for (let i = 0; i < toolResults.length; i++) {
         const call = toolCalls[i]!;
         const settled = toolResults[i]!;
 
         if (settled.status === "fulfilled") {
           const { args, result } = settled.value;
-          yield { type: "tool_start", name: call.function.name, args };
           yield { type: "tool_result", name: call.function.name, result };
 
           this.messages.push({
@@ -224,7 +232,6 @@ export class AgentLoop {
           progressLedger.lastProgressAt = new Date();
         } else {
           const errorMsg = getErrorMessage(settled.reason);
-          yield { type: "tool_start", name: call.function.name, args: {} };
           yield { type: "tool_error", name: call.function.name, error: errorMsg };
 
           this.messages.push({

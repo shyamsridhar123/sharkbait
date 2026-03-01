@@ -114,17 +114,20 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
     return config.azure.deployment;
   });
   const abortControllerRef = useRef<AbortController | null>(null);
-  // Throttle streaming output updates to reduce re-renders
+  // Unified render throttle — accumulate ALL state changes in refs, flush once per interval
+  const RENDER_INTERVAL = 150; // ms between UI updates
   const pendingOutputRef = useRef<string>("");
   const pendingTokensRef = useRef<number>(0);
   const pendingCostRef = useRef<number>(0);
-  const outputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeToolCallsRef = useRef<TrackedToolCall[]>([]); // authoritative tool call list
+  const toolCallsDirtyRef = useRef(false);
+  const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { exit } = useApp();
 
   const workingDir = currentDir;
 
-  // Flush pending streaming output, tokens, and cost to state in a single batch
-  const flushOutput = useCallback(() => {
+  // Flush ALL pending state changes to React state in one batch
+  const flushRender = useCallback(() => {
     const output = pendingOutputRef.current;
     const reasoning = pendingReasoningRef.current;
     const tokens = pendingTokensRef.current;
@@ -139,25 +142,41 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
       setSessionCost(prev => prev + cost);
       pendingCostRef.current = 0;
     }
-    outputTimerRef.current = null;
+    if (toolCallsDirtyRef.current) {
+      setActiveToolCalls([...activeToolCallsRef.current]);
+      toolCallsDirtyRef.current = false;
+    }
+    renderTimerRef.current = null;
   }, []);
 
-  // Throttled setter: accumulates output, tokens, and cost in refs, flushes every 80ms
+  // Schedule a render flush if one isn't already pending
+  const scheduleRender = useCallback(() => {
+    if (!renderTimerRef.current) {
+      renderTimerRef.current = setTimeout(flushRender, RENDER_INTERVAL);
+    }
+  }, [flushRender]);
+
+  // Throttled setter: accumulates output, tokens, and cost in refs
   const throttledSetOutput = useCallback((content: string, chunkTokens?: number) => {
     pendingOutputRef.current = content;
     if (chunkTokens && chunkTokens > 0) {
       pendingTokensRef.current += chunkTokens;
       pendingCostRef.current += chunkTokens * 0.00003;
     }
-    if (!outputTimerRef.current) {
-      outputTimerRef.current = setTimeout(flushOutput, 80);
-    }
-  }, [flushOutput]);
+    scheduleRender();
+  }, [scheduleRender]);
+
+  // Throttled tool call state — mutate ref, render on schedule
+  const updateToolCalls = useCallback((updater: (prev: TrackedToolCall[]) => TrackedToolCall[]) => {
+    activeToolCallsRef.current = updater(activeToolCallsRef.current);
+    toolCallsDirtyRef.current = true;
+    scheduleRender();
+  }, [scheduleRender]);
 
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
-      if (outputTimerRef.current) clearTimeout(outputTimerRef.current);
+      if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
     };
   }, []);
 
@@ -336,6 +355,9 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
     setCurrentOutput("");
     setCurrentReasoning("");
     pendingReasoningRef.current = "";
+    pendingOutputRef.current = "";
+    activeToolCallsRef.current = [];
+    toolCallsDirtyRef.current = false;
     setActiveToolCalls([]);
     
     // Track tokens from user message
@@ -358,9 +380,7 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
         switch (event.type) {
           case "reasoning":
             pendingReasoningRef.current += event.content;
-            if (!outputTimerRef.current) {
-              outputTimerRef.current = setTimeout(flushOutput, 80);
-            }
+            scheduleRender();
             break;
 
           case "text":
@@ -435,14 +455,14 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
               status: "running",
               startTime: Date.now(),
             };
-            setActiveToolCalls(prev => [...prev, newTool]);
+            updateToolCalls(prev => [...prev, newTool]);
             break;
           }
           
           case "tool_result": {
             const duration = event.duration;
-            // Update status and remove in a single state update
-            setActiveToolCalls(prev => {
+            // Update status and remove via throttled ref
+            updateToolCalls(prev => {
               const updated = prev.map(tc => 
                 tc.name === event.name && tc.status === "running"
                   ? { 
@@ -466,8 +486,8 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
           
           case "tool_error": {
             const duration = event.duration;
-            // Update the tool call status
-            setActiveToolCalls(prev => prev.map(tc => 
+            // Update the tool call status via throttled ref
+            updateToolCalls(prev => prev.map(tc => 
               tc.name === event.name && tc.status === "running"
                 ? { 
                     ...tc, 
@@ -485,12 +505,12 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
             break;
             
           case "done":
-            // Flush any remaining throttled output
-            if (outputTimerRef.current) {
-              clearTimeout(outputTimerRef.current);
-              outputTimerRef.current = null;
+            // Cancel any pending throttled render
+            if (renderTimerRef.current) {
+              clearTimeout(renderTimerRef.current);
+              renderTimerRef.current = null;
             }
-            // Flush pending tokens/cost
+            // Flush final pending tokens/cost
             if (pendingTokensRef.current > 0) {
               setTokenCount(prev => prev + pendingTokensRef.current);
               pendingTokensRef.current = 0;
@@ -499,10 +519,12 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
               setSessionCost(prev => prev + pendingCostRef.current);
               pendingCostRef.current = 0;
             }
+            // Clear all refs
             pendingOutputRef.current = "";
             pendingReasoningRef.current = "";
-            setCurrentReasoning("");
-            // Only add message if there's actual content
+            activeToolCallsRef.current = [];
+            toolCallsDirtyRef.current = false;
+            // Batch final state: add message then clear streaming state
             if (assistantContent.trim()) {
               setMessages(prev => [...prev, { 
                 role: "assistant", 
@@ -512,6 +534,7 @@ export function App({ contextFiles: initialContextFiles, enableBeads: initialBea
               }]);
             }
             setCurrentOutput("");
+            setCurrentReasoning("");
             setActiveToolCalls([]);
             setCurrentAgent(null);
             setThinkingMessage(null);
