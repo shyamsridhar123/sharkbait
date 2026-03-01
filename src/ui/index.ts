@@ -65,7 +65,7 @@ export {
 } from "./command-history";
 
 // Claude Code-inspired components
-export { Logo, InlineLogo } from "./logo";
+export { Logo, InlineLogo, SHARK_LOGO } from "./logo";
 export { WelcomeScreen } from "./welcome";
 export { StatusBar } from "./status-bar";
 export { InputPrompt } from "./input-prompt";

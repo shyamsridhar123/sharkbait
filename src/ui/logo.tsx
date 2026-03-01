@@ -7,7 +7,7 @@ import { Box, Text } from "ink";
 import { colors } from "./theme";
 
 // Shark ASCII art - embedded directly so it works in bundled/npm installs
-const SHARK_LOGO = `
+export const SHARK_LOGO = `
                               +.+++.
                             ## ....-### -
                            +  ###++++-#++-

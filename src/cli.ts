@@ -13,6 +13,7 @@ import { runTask } from "./commands/run";
 import { runSetup } from "./commands/setup";
 import { runReview } from "./commands/review";
 import { VERSION } from "./version";
+import { SHARK_LOGO } from "./ui/logo";
 
 // Check if no args - start chat directly
 const args = process.argv.slice(2);
@@ -26,7 +27,8 @@ const program = new Command();
 program
   .name("sharkbait")
   .description("AI coding assistant for the command line")
-  .version(VERSION);
+  .version(VERSION)
+  .addHelpText("before", `\x1b[36m${SHARK_LOGO}\x1b[0m\n`);
 
 program
   .command("chat")

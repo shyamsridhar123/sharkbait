@@ -11,6 +11,8 @@ import { join } from "path";
 import { homedir } from "os";
 import { existsSync } from "fs";
 import { colors, icons } from "../ui/theme";
+import { Logo } from "../ui/logo";
+import { VERSION } from "../version";
 
 type SetupStep = 
   | "welcome"
@@ -218,6 +220,9 @@ AZURE_OPENAI_API_VERSION=2024-10-21
 
   return (
     <Box flexDirection="column" padding={1}>
+      {/* Logo */}
+      <Logo variant="full" version={VERSION} />
+
       {/* Header */}
       <Box marginBottom={1}>
         <Text color={colors.primary} bold>
