@@ -2,7 +2,7 @@
  * Parallel Progress View Component - Visualize parallel agent execution
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { Spinner } from "./spinner";
 import { colors, icons } from "./theme";
@@ -66,7 +66,7 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-export function ParallelProgressView({
+export const ParallelProgressView = memo(function ParallelProgressView({
   title = "Parallel Execution",
   agents,
   strategy,
@@ -160,4 +160,4 @@ export function ParallelProgressView({
       )}
     </Box>
   );
-}
+});

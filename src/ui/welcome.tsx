@@ -2,7 +2,7 @@
  * Welcome Screen - Claude Code inspired startup screen
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { Logo } from "./logo";
 import { colors, box } from "./theme";
@@ -12,7 +12,7 @@ interface WelcomeProps {
   workingDir: string;
 }
 
-export function WelcomeScreen({ version, workingDir }: WelcomeProps): React.JSX.Element {
+export const WelcomeScreen = memo(function WelcomeScreen({ version, workingDir }: WelcomeProps): React.JSX.Element {
   const tips = [
     "Type your request and press Enter to send",
     "Use /help for available commands",
@@ -57,4 +57,4 @@ export function WelcomeScreen({ version, workingDir }: WelcomeProps): React.JSX.
       </Box>
     </Box>
   );
-}
+});

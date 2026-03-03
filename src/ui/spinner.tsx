@@ -2,7 +2,7 @@
  * Spinner Component - Simple loading indicator
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, memo } from "react";
 import { Text, Box } from "ink";
 import { colors, SPINNER_FRAMES, DOTS_FRAMES } from "./theme";
 
@@ -13,7 +13,7 @@ interface SpinnerProps {
   tokens?: number;
 }
 
-export function Spinner({ 
+export const Spinner = memo(function Spinner({
   text = "Thinking...", 
   variant = "braille",
   showTokens = false,
@@ -40,4 +40,4 @@ export function Spinner({
       )}
     </Box>
   );
-}
+});

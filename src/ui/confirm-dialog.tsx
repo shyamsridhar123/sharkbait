@@ -2,7 +2,7 @@
  * Confirm Dialog Component - Prompt user for confirmation on destructive actions
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { colors, icons } from "./theme";
 
@@ -14,7 +14,7 @@ interface ConfirmDialogProps {
   onCancel?: () => void;
 }
 
-export function ConfirmDialog({
+export const ConfirmDialog = memo(function ConfirmDialog({
   message,
   details,
   showDiff,
@@ -61,7 +61,7 @@ export function ConfirmDialog({
       </Box>
     </Box>
   );
-}
+});
 
 /**
  * Check if a response is affirmative

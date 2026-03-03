@@ -2,7 +2,7 @@
  * Input Prompt Component - User input with Claude Code styling
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { colors } from "./theme";
 
@@ -12,7 +12,7 @@ interface InputPromptProps {
   disabled?: boolean;
 }
 
-export function InputPrompt({ 
+export const InputPrompt = memo(function InputPrompt({
   value, 
   placeholder = "Send a message...",
   disabled = false 
@@ -32,4 +32,4 @@ export function InputPrompt({
       {!disabled && <Text color={colors.primary}>▋</Text>}
     </Box>
   );
-}
+});

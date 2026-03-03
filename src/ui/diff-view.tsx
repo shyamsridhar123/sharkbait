@@ -2,7 +2,7 @@
  * Diff View Component - Display code changes with red/green diff colors
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { colors, box } from "./theme";
 import { basename } from "path";
@@ -109,7 +109,7 @@ function collapseContext(lines: DiffLine[], contextLines: number): DiffLine[] {
   return result;
 }
 
-export function DiffView({ 
+export const DiffView = memo(function DiffView({
   filePath, 
   oldContent, 
   newContent,
@@ -178,4 +178,4 @@ export function DiffView({
       </Box>
     </Box>
   );
-}
+});

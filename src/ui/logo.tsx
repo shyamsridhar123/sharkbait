@@ -2,7 +2,7 @@
  * Logo Component - Displays the Sharkbait ASCII art logo
  */
 
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { colors } from "./theme";
 
@@ -41,7 +41,7 @@ interface LogoProps {
   version?: string;
 }
 
-export function Logo({ variant = "full", version = "0.0.0" }: LogoProps): React.JSX.Element {
+export const Logo = memo(function Logo({ variant = "full", version = "0.0.0" }: LogoProps): React.JSX.Element {
   const logoText = variant === "inline" ? "" : SHARK_LOGO;
 
   return (
@@ -55,14 +55,14 @@ export function Logo({ variant = "full", version = "0.0.0" }: LogoProps): React.
       )}
     </Box>
   );
-}
+});
 
 // Inline logo for headers
-export function InlineLogo(): React.JSX.Element {
+export const InlineLogo = memo(function InlineLogo(): React.JSX.Element {
   return (
     <Text>
       <Text color={colors.primary}>🦈</Text>
       <Text bold color={colors.primary}> sharkbait</Text>
     </Text>
   );
-}
+});

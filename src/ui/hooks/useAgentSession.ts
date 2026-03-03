@@ -2,18 +2,19 @@
  * useAgentSession - Custom hook extracting agent event handling from App.tsx
  *
  * Encapsulates:
- * - All 15+ state variables into a single useReducer
- * - The 160-line event dispatch loop
+ * - All 15+ state variables into a single useReducer (batched state transitions)
+ * - Throttled streaming output via refs (prevents per-chunk re-renders)
+ * - The event dispatch loop
  * - AbortController management
  * - Token estimation
  *
  * The App component becomes a thin renderer over this hook's state.
  */
 
-import { useReducer, useRef, useCallback } from "react";
+import { useReducer, useRef, useCallback, useEffect } from "react";
 import { Agent } from "../../agent/agent";
 import { getWorkingDir, loadConfig } from "../../utils/config";
-import type { AgentEvent, ParallelAgentProgress } from "../../agent/types";
+import type { ParallelAgentProgress } from "../../agent/types";
 import { basename } from "path";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -38,7 +39,6 @@ interface Message {
 
 interface SessionState {
   messages: Message[];
-  input: string;
   isLoading: boolean;
   currentOutput: string;
   showWelcome: boolean;
@@ -63,28 +63,21 @@ interface SessionState {
 // ─── Reducer ───────────────────────────────────────────────────────────────────
 
 type SessionAction =
-  | { type: "SET_INPUT"; value: string }
-  | { type: "BACKSPACE" }
   | { type: "ADD_MESSAGE"; message: Message }
   | { type: "CLEAR_MESSAGES" }
   | { type: "SET_LOADING"; value: boolean }
   | { type: "SET_EXECUTING"; value: boolean }
   | { type: "SET_CURRENT_OUTPUT"; value: string }
-  | { type: "APPEND_OUTPUT"; content: string; tokenDelta: number; costDelta: number }
+  | { type: "FLUSH_STREAMING"; output: string; reasoning: string; tokenDelta: number; costDelta: number; toolCalls: TrackedToolCall[] | null }
   | { type: "HIDE_WELCOME" }
   | { type: "SHOW_WELCOME" }
   | { type: "SET_CURRENT_DIR"; value: string }
   | { type: "SET_PENDING_CONFIRM"; value: SessionState["pendingConfirm"] }
   | { type: "SET_BEADS_ENABLED"; value: boolean }
   | { type: "SET_CONTEXT_FILES"; value: string[] }
-  | { type: "ADD_TOOL_CALL"; tool: TrackedToolCall }
-  | { type: "UPDATE_TOOL_CALL"; name: string; update: Partial<TrackedToolCall> }
-  | { type: "COMPLETE_TOOL_CALL"; name: string }
-  | { type: "CLEAR_TOOL_CALLS" }
   | { type: "SET_CURRENT_AGENT"; value: string | null }
   | { type: "SET_PARALLEL_PROGRESS"; value: SessionState["parallelProgress"] }
   | { type: "SET_THINKING"; value: string | null }
-  | { type: "APPEND_REASONING"; content: string }
   | { type: "SET_MODEL"; value: string }
   | { type: "SET_TOKEN_COUNT"; value: number }
   | { type: "ADD_TOKENS"; delta: number }
@@ -93,10 +86,6 @@ type SessionAction =
 
 function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
-    case "SET_INPUT":
-      return { ...state, input: action.value };
-    case "BACKSPACE":
-      return { ...state, input: state.input.slice(0, -1) };
     case "ADD_MESSAGE":
       return { ...state, messages: [...state.messages, action.message] };
     case "CLEAR_MESSAGES":
@@ -107,13 +96,19 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
       return { ...state, isExecuting: action.value };
     case "SET_CURRENT_OUTPUT":
       return { ...state, currentOutput: action.value };
-    case "APPEND_OUTPUT":
-      return {
-        ...state,
-        currentOutput: state.currentOutput + action.content,
-        tokenCount: state.tokenCount + action.tokenDelta,
-        sessionCost: state.sessionCost + action.costDelta,
-      };
+    case "FLUSH_STREAMING": {
+      const next = { ...state };
+      next.currentOutput = action.output;
+      next.currentReasoning = action.reasoning;
+      if (action.tokenDelta > 0) {
+        next.tokenCount = state.tokenCount + action.tokenDelta;
+        next.sessionCost = state.sessionCost + action.costDelta;
+      }
+      if (action.toolCalls !== null) {
+        next.activeToolCalls = action.toolCalls;
+      }
+      return next;
+    }
     case "HIDE_WELCOME":
       return { ...state, showWelcome: false };
     case "SHOW_WELCOME":
@@ -126,34 +121,12 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
       return { ...state, beadsEnabled: action.value };
     case "SET_CONTEXT_FILES":
       return { ...state, contextFiles: action.value };
-    case "ADD_TOOL_CALL":
-      return { ...state, activeToolCalls: [...state.activeToolCalls, action.tool] };
-    case "UPDATE_TOOL_CALL":
-      return {
-        ...state,
-        activeToolCalls: state.activeToolCalls.map((tc) =>
-          tc.name === action.name && tc.status === "running"
-            ? { ...tc, ...action.update }
-            : tc
-        ),
-      };
-    case "COMPLETE_TOOL_CALL":
-      return {
-        ...state,
-        activeToolCalls: state.activeToolCalls.filter(
-          (tc) => !(tc.name === action.name && tc.status === "success")
-        ),
-      };
-    case "CLEAR_TOOL_CALLS":
-      return { ...state, activeToolCalls: [] };
     case "SET_CURRENT_AGENT":
       return { ...state, currentAgent: action.value };
     case "SET_PARALLEL_PROGRESS":
       return { ...state, parallelProgress: action.value };
     case "SET_THINKING":
       return { ...state, thinkingMessage: action.value };
-    case "APPEND_REASONING":
-      return { ...state, currentReasoning: state.currentReasoning + action.content };
     case "SET_MODEL":
       return { ...state, currentModel: action.value };
     case "SET_TOKEN_COUNT":
@@ -168,6 +141,7 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
         currentOutput: "",
         currentReasoning: "",
         activeToolCalls: [],
+        thinkingMessage: null,
         messages: [
           ...state.messages,
           { role: "system", content: "Operation cancelled", timestamp: new Date() },
@@ -182,6 +156,8 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
         currentAgent: null,
         thinkingMessage: null,
         parallelProgress: null,
+        isLoading: false,
+        isExecuting: false,
         messages: action.content.trim()
           ? [
               ...state.messages,
@@ -230,12 +206,13 @@ export interface UseAgentSessionOptions {
   workingDir?: string;
 }
 
+const RENDER_INTERVAL = 150; // ms between streaming UI updates
+
 export function useAgentSession(options: UseAgentSessionOptions = {}) {
   const config = loadConfig();
 
   const [state, dispatch] = useReducer(sessionReducer, {
     messages: [],
-    input: "",
     isLoading: false,
     currentOutput: "",
     showWelcome: true,
@@ -256,12 +233,76 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // ─── Throttled streaming refs ───────────────────────────────────────────
+  const pendingOutputRef = useRef<string>("");
+  const pendingReasoningRef = useRef<string>("");
+  const pendingTokensRef = useRef<number>(0);
+  const pendingCostRef = useRef<number>(0);
+  const activeToolCallsRef = useRef<TrackedToolCall[]>([]);
+  const toolCallsDirtyRef = useRef(false);
+  const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flush all pending streaming state into one dispatch
+  const flushRender = useCallback(() => {
+    const tokens = pendingTokensRef.current;
+    const cost = pendingCostRef.current;
+    pendingTokensRef.current = 0;
+    pendingCostRef.current = 0;
+    const toolCallsSnapshot = toolCallsDirtyRef.current
+      ? [...activeToolCallsRef.current]
+      : null;
+    toolCallsDirtyRef.current = false;
+    renderTimerRef.current = null;
+
+    dispatch({
+      type: "FLUSH_STREAMING",
+      output: pendingOutputRef.current,
+      reasoning: pendingReasoningRef.current,
+      tokenDelta: tokens,
+      costDelta: cost,
+      toolCalls: toolCallsSnapshot,
+    });
+  }, []);
+
+  // Schedule a throttled render flush
+  const scheduleRender = useCallback(() => {
+    if (!renderTimerRef.current) {
+      renderTimerRef.current = setTimeout(flushRender, RENDER_INTERVAL);
+    }
+  }, [flushRender]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
+    };
+  }, []);
+
+  // Update tool calls via ref + schedule
+  const updateToolCalls = useCallback((updater: (prev: TrackedToolCall[]) => TrackedToolCall[]) => {
+    activeToolCallsRef.current = updater(activeToolCallsRef.current);
+    toolCallsDirtyRef.current = true;
+    scheduleRender();
+  }, [scheduleRender]);
+
   /**
    * Process all agent events from a run — the extracted event dispatch loop
+   * with throttled streaming to minimize re-renders
    */
   const processAgentEvents = useCallback(
     async (agent: Agent, userMessage: string) => {
       dispatch({ type: "ADD_TOKENS", delta: estimateTokens(userMessage) });
+      dispatch({ type: "SET_LOADING", value: true });
+      dispatch({ type: "SET_EXECUTING", value: true });
+      dispatch({ type: "SET_CURRENT_OUTPUT", value: "" });
+
+      // Reset throttle refs
+      pendingOutputRef.current = "";
+      pendingReasoningRef.current = "";
+      pendingTokensRef.current = 0;
+      pendingCostRef.current = 0;
+      activeToolCallsRef.current = [];
+      toolCallsDirtyRef.current = false;
 
       abortControllerRef.current = new AbortController();
 
@@ -274,23 +315,21 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
 
           switch (event.type) {
             case "reasoning":
-              dispatch({ type: "APPEND_REASONING", content: event.content });
+              pendingReasoningRef.current += event.content;
+              scheduleRender();
               break;
 
             case "text": {
               const tokens = estimateTokens(event.content);
               assistantContent += event.content;
-              dispatch({
-                type: "APPEND_OUTPUT",
-                content: event.content,
-                tokenDelta: tokens,
-                costDelta: tokens * 0.00003,
-              });
+              pendingOutputRef.current = assistantContent;
+              pendingTokensRef.current += tokens;
+              pendingCostRef.current += tokens * 0.00003;
+              scheduleRender();
               break;
             }
 
             case "agent_start":
-            case "agent_switch":
               dispatch({ type: "SET_CURRENT_AGENT", value: event.agent });
               dispatch({
                 type: "ADD_MESSAGE",
@@ -333,6 +372,14 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
                 type: "SET_PARALLEL_PROGRESS",
                 value: { agents: event.agents, strategy: event.strategy },
               });
+              dispatch({
+                type: "ADD_MESSAGE",
+                message: {
+                  role: "system",
+                  content: `Starting parallel execution (${event.strategy} strategy) with ${event.agents.length} agents...`,
+                  timestamp: new Date(),
+                },
+              });
               break;
 
             case "parallel_progress":
@@ -356,16 +403,13 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
 
             case "tool_start": {
               const toolInfo = formatToolInfo(event.name, event.args);
-              dispatch({
-                type: "ADD_TOOL_CALL",
-                tool: {
-                  id: `${event.name}-${Date.now()}`,
-                  name: event.name,
-                  displayName: toolInfo,
-                  status: "running",
-                  startTime: Date.now(),
-                },
-              });
+              updateToolCalls(prev => [...prev, {
+                id: `${event.name}-${Date.now()}`,
+                name: event.name,
+                displayName: toolInfo,
+                status: "running" as const,
+                startTime: Date.now(),
+              }]);
               break;
             }
 
@@ -373,53 +417,62 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
               const resultStr = typeof event.result === "string"
                 ? event.result.slice(0, 100)
                 : JSON.stringify(event.result).slice(0, 100);
+              const duration = (event as any).duration;
 
-              dispatch({
-                type: "UPDATE_TOOL_CALL",
-                name: event.name,
-                update: {
-                  status: "success",
-                  duration: (event as any).duration,
-                  result: resultStr,
-                },
+              updateToolCalls(prev => {
+                const updated = prev.map(tc =>
+                  tc.name === event.name && tc.status === "running"
+                    ? { ...tc, status: "success" as const, duration, result: resultStr }
+                    : tc
+                );
+                const completed = updated.find(tc => tc.name === event.name && tc.status === "success");
+                if (completed) {
+                  completedToolCalls.push(completed);
+                }
+                return updated.filter(tc => !(tc.name === event.name && tc.status === "success"));
               });
-
-              // Move from active to completed
-              completedToolCalls.push({
-                id: `${event.name}-done`,
-                name: event.name,
-                displayName: event.name,
-                status: "success",
-                startTime: Date.now(),
-                result: resultStr,
-              });
-              dispatch({ type: "COMPLETE_TOOL_CALL", name: event.name });
               break;
             }
 
-            case "tool_error":
-              dispatch({
-                type: "UPDATE_TOOL_CALL",
-                name: event.name,
-                update: {
-                  status: "error",
-                  duration: (event as any).duration,
-                  error: event.error,
-                },
-              });
+            case "tool_error": {
+              const duration = (event as any).duration;
+              updateToolCalls(prev => prev.map(tc =>
+                tc.name === event.name && tc.status === "running"
+                  ? { ...tc, status: "error" as const, duration, error: event.error }
+                  : tc
+              ));
               break;
+            }
 
             case "token_usage":
               dispatch({ type: "SET_TOKEN_COUNT", value: event.totalTokens });
               break;
 
-            case "done":
+            case "done": {
+              // Cancel pending throttled render and flush final state
+              if (renderTimerRef.current) {
+                clearTimeout(renderTimerRef.current);
+                renderTimerRef.current = null;
+              }
+              // Flush any remaining pending tokens
+              if (pendingTokensRef.current > 0) {
+                dispatch({ type: "ADD_TOKENS", delta: pendingTokensRef.current });
+                pendingTokensRef.current = 0;
+              }
+              // Clear refs
+              pendingOutputRef.current = "";
+              pendingReasoningRef.current = "";
+              pendingCostRef.current = 0;
+              activeToolCallsRef.current = [];
+              toolCallsDirtyRef.current = false;
+
               dispatch({
                 type: "FINISH_RESPONSE",
                 content: assistantContent,
                 toolCalls: completedToolCalls,
               });
               break;
+            }
 
             case "error":
               dispatch({
@@ -431,11 +484,6 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
                 },
               });
               break;
-
-            case "workflow_start":
-            case "workflow_complete":
-              // Handled by the text/done events
-              break;
           }
         }
       } catch (error) {
@@ -446,20 +494,29 @@ export function useAgentSession(options: UseAgentSessionOptions = {}) {
             message: { role: "system", content: `Error: ${message}`, timestamp: new Date() },
           });
         }
+        dispatch({ type: "SET_LOADING", value: false });
+        dispatch({ type: "SET_EXECUTING", value: false });
       }
 
-      dispatch({ type: "SET_LOADING", value: false });
-      dispatch({ type: "SET_EXECUTING", value: false });
       abortControllerRef.current = null;
     },
-    []
+    [scheduleRender, updateToolCalls]
   );
 
   const cancelOperation = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-      dispatch({ type: "CANCEL_OPERATION" });
     }
+    // Cancel pending throttled render
+    if (renderTimerRef.current) {
+      clearTimeout(renderTimerRef.current);
+      renderTimerRef.current = null;
+    }
+    pendingOutputRef.current = "";
+    pendingReasoningRef.current = "";
+    activeToolCallsRef.current = [];
+    toolCallsDirtyRef.current = false;
+    dispatch({ type: "CANCEL_OPERATION" });
   }, []);
 
   return {
