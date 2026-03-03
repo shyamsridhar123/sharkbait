@@ -206,7 +206,7 @@ export interface UseAgentSessionOptions {
   workingDir?: string;
 }
 
-const RENDER_INTERVAL = 150; // ms between streaming UI updates
+const RENDER_INTERVAL = 200; // ms between streaming UI updates
 
 export function useAgentSession(options: UseAgentSessionOptions = {}) {
   const config = loadConfig();

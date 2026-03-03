@@ -12,7 +12,7 @@
  */
 
 import React, { useCallback, useMemo } from "react";
-import { Box, Text, useApp } from "ink";
+import { Box, Text, Static, useApp } from "ink";
 import { Agent } from "../agent/agent";
 import { MessageView } from "./message";
 import { Spinner } from "./spinner";
@@ -224,30 +224,13 @@ export function App({
     [pendingConfirm, showWelcome, commandContext, agent, processAgentEvents, handleConfirmation, dispatch]
   );
 
-  // ─── Memoized message list ─────────────────────────────────────────────
-  const messageList = useMemo(
-    () =>
-      messages.map((msg, i) => (
-        <Box key={i} flexDirection="column">
-          <MessageView role={msg.role} content={msg.content} timestamp={msg.timestamp} />
-          {msg.toolCalls && msg.toolCalls.length > 0 && (
-            <Box flexDirection="column" marginLeft={2}>
-              {msg.toolCalls.map((tc, j) => (
-                <ToolCallView
-                  key={j}
-                  name={tc.displayName}
-                  status={tc.status}
-                  result={tc.result}
-                  error={tc.error}
-                  duration={tc.duration}
-                />
-              ))}
-            </Box>
-          )}
-        </Box>
-      )),
-    [messages]
-  );
+  // ─── Message rendering ─────────────────────────────────────────────────
+  // Committed messages are rendered via <Static> — they are written to
+  // stdout once and removed from the Ink reconciliation tree.  Only the
+  // latest message (if currently streaming) stays in the live area.
+  // This eliminates the O(n) re-render cost that caused flickering as
+  // conversations grew.
+  const committedMessages = messages;
 
   // ─── Memoized active tool calls ────────────────────────────────────────
   const activeToolCallList = useMemo(
@@ -272,21 +255,45 @@ export function App({
   // ─── Render ────────────────────────────────────────────────────────────
   return (
     <Box flexDirection="column" padding={0}>
-      {/* Welcome Screen or Header */}
-      {showWelcome ? (
+      {/* Welcome Screen */}
+      {showWelcome && (
         <WelcomeScreen version={version} workingDir={currentDir} />
-      ) : (
-        <Box marginBottom={0} justifyContent="space-between">
-          <InlineLogo />
-          <Text color={colors.textDim}>v{version}</Text>
-        </Box>
       )}
 
-      {/* Messages */}
+      {/* Committed messages — rendered once, then removed from Ink tree */}
+      {!showWelcome && (
+        <Static items={committedMessages}>
+          {(msg, i) => (
+            <Box key={`msg-${i}-${msg.timestamp?.getTime() ?? i}`} flexDirection="column">
+              {i === 0 && (
+                <Box marginBottom={0} justifyContent="space-between">
+                  <InlineLogo />
+                  <Text color={colors.textDim}>v{version}</Text>
+                </Box>
+              )}
+              <MessageView role={msg.role} content={msg.content} timestamp={msg.timestamp} />
+              {msg.toolCalls && msg.toolCalls.length > 0 && (
+                <Box flexDirection="column" marginLeft={2}>
+                  {msg.toolCalls.map((tc, j) => (
+                    <ToolCallView
+                      key={j}
+                      name={tc.displayName}
+                      status={tc.status}
+                      result={tc.result}
+                      error={tc.error}
+                      duration={tc.duration}
+                    />
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
+        </Static>
+      )}
+
+      {/* Live area — only this section re-renders on streaming updates */}
       {!showWelcome && (
         <Box flexDirection="column" marginBottom={0}>
-          {messageList}
-
           {/* Active tool calls */}
           {activeToolCallList}
 
